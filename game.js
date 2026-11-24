@@ -5,7 +5,7 @@ var C=document.getElementById('c'),X=C.getContext('2d');
 var O=document.createElement('canvas'),OX=O.getContext('2d');
 C.width=O.width=W*DPR;C.height=O.height=H*DPR;
 X.setTransform(DPR,0,0,DPR,0,0);OX.setTransform(DPR,0,0,DPR,0,0);
-var M=document.getElementById('m'),NB=document.getElementById('nb');
+var M=document.getElementById('m'),NB=document.getElementById('nb'),HB=document.getElementById('hb');
 var best=0;try{best=+localStorage.getItem('pr_best')||0}catch(e){}
 function lx(i){return RX+LW*i+LW/2}
 function rnd(a,b){return a+Math.random()*(b-a)}
@@ -26,7 +26,7 @@ function reset(){
  G={on:true,t:0,clock:16,dist:0,bonus:0,speed:200,fuel:100,nitro:30,hp:3,inv:0,
   px:lx(1),tx:lx(1),slip:0,shake:0,flash:0,
   obs:[],haz:[],pk:[],dec:[],pop:[],rain:[],
-  w:0,wTarget:0,wName:'Cerah',wTimer:20,spawn:0.5,hz:1.5,pkT:8,dcT:0,off:0,pt:[],bend:0,bT:0,bTimer:6};
+  w:0,wTarget:0,wName:'Cerah',wTimer:20,spawn:0.5,hz:1.5,pkT:8,dcT:0,off:0,pt:[],bend:0,bT:0,bTimer:35,bDur:0,hk:0};
  for(var i=0;i<90;i++)G.rain.push({x:rnd(0,W),y:rnd(0,H),s:rnd(.7,1.3)});
  for(var j=0;j<10;j++)addDecor(rnd(0,H));
 }
@@ -38,6 +38,7 @@ function addDecor(y){
 function dark(h){h=((h%24)+24)%24;if(h>=19||h<5)return 1;if(h>=17)return(h-17)/2;if(h>=5&&h<7)return 1-(h-5)/2;return 0}
 
 function sx(y){return G.bend*120*Math.pow(Math.max(0,(H-y)/H),2)}
+function slope(y){return Math.atan(G.bend*240*Math.max(0,H-y)/(H*H))}
 function emit(x,y,n,c,sp,l,s,add){for(var i=0;i<n;i++)G.pt.push({x:x,y:y,vx:rnd(-sp,sp),vy:rnd(-sp,sp)*.8,l:l*rnd(.6,1),m:l,c:c,s:s,a:add})}
 function spawnObs(){
  var r=Math.random(),t=r<.3?'mobil':r<.52?'motor':r<.67?'angkot':r<.77?'bus':r<.9?'truk':'becak';
@@ -64,9 +65,10 @@ function update(dt){
  g.w+=(g.wTarget-g.w)*Math.min(1,dt*.6);
  if(g.w>.85&&Math.random()<dt*.25)g.flash=.6;
  g.flash=Math.max(0,g.flash-dt*2.5);
- g.bTimer-=dt;
- if(g.bTimer<=0){g.bT=pick([-1,-.6,0,0,.6,1]);g.bTimer=rnd(5,9);
-  if(Math.abs(g.bT)>.5)g.pop.push({x:W/2,y:200,t:g.bT>0?'Tikungan kanan \u2192':'\u2190 Tikungan kiri',l:1.8})}
+ if(g.bT==0){g.bTimer-=dt;
+  if(g.bTimer<=0){g.bT=pick([-1,-.7,.7,1]);g.bDur=rnd(10,15);
+   g.pop.push({x:W/2,y:200,t:g.bT>0?'Tikungan kanan \u2192':'\u2190 Tikungan kiri',l:2})}}
+ else{g.bDur-=dt;if(g.bDur<=0){g.bT=0;g.bTimer=rnd(42,70)}}
  g.bend+=(g.bT-g.bend)*Math.min(1,dt*.5);
  g.tx-=g.bend*55*(g.speed/300)*dt;
  // kontrol
@@ -86,7 +88,7 @@ function update(dt){
  g.dist+=g.speed*dt/18;
  g.fuel-=dt*(2.3+(bo?2.2:0));
  if(g.fuel<=0)return over('Bensin habis di jalan');
- g.inv=Math.max(0,g.inv-dt);g.shake=Math.max(0,g.shake-dt*25);
+ g.hk=Math.max(0,g.hk-dt);g.inv=Math.max(0,g.inv-dt);g.shake=Math.max(0,g.shake-dt*25);
  // spawn
  g.spawn-=dt;
  if(g.spawn<=0){spawnObs();g.spawn=Math.max(.4,1-g.dist/3200)*rnd(.7,1.2)}
@@ -117,18 +119,22 @@ function update(dt){
  g.pk=g.pk.filter(function(k){return k.y<H+30&&!k.got});
  g.obs.forEach(function(o){
   // perilaku
-  if(o.t=='motor'){o.ch-=dt;if(o.ch<=0&&o.y>-20&&o.y<300){o.lane=cl(o.lane+(Math.random()<.5?-1:1),0,N-1);o.ch=rnd(1.2,2.5)}}
-  if(o.t=='angkot'){
+  if(o.t=='motor'&&!o.fl){o.ch-=dt;if(o.ch<=0&&o.y>-20&&o.y<300){o.lane=cl(o.lane+(Math.random()<.5?-1:1),0,N-1);o.ch=rnd(1.2,2.5)}}
+  if(o.t=='angkot'&&!o.fl){
    if(o.br>0){o.br-=dt;o.v=30;if(o.br<=0)o.v=o.v0}
    else if(o.y>40&&o.y<350&&Math.random()<dt*.35)o.br=1.3;
   }
-  o.x+=(lx(o.lane)-o.x)*Math.min(1,dt*3);
+  if(o.fl){o.x+=o.kx*dt;o.kx*=Math.pow(.55,dt);o.rot=(o.rot||0)+o.sp*dt;o.sp*=Math.pow(.6,dt);if(Math.random()<dt*14)emit(o.x,o.y,1,'90,90,90',20,.8,6,0)}
+  else o.x+=(lx(o.lane)-o.x)*Math.min(1,dt*3);
   o.y+=(g.speed-o.v)*dt;
   // tabrakan
   var dx=Math.abs(o.x-p.x),dy=Math.abs(o.y-p.y);
   var hw=(o.w+p.w)/2-3,hh=(o.h+p.h)/2-5;
   if(!o.hit&&dx<hw&&dy<hh&&g.inv<=0){
    o.hit=1;g.hp--;g.inv=1.4;g.speed*=.4;g.fuel=Math.max(0,g.fuel-8);g.shake=14;vib(120);
+   var dd=o.x>p.x?1:o.x<p.x?-1:pick([-1,1]);
+   o.fl=1;o.kx=dd*(o.t=='motor'||o.t=='becak'?380:o.t=='bus'||o.t=='truk'?210:300);o.sp=dd*rnd(3,6);o.rot=0;o.v+=140;
+   g.tx-=dd*34;g.px-=dd*20;emit(o.x-dd*o.w/2,o.y,10,'255,220,120',200,.4,3,1);
    g.pop.push({x:p.x,y:p.y-50,t:'Brak!',l:1});emit(p.x,p.y,18,'255,200,80',240,.55,3,1);
    if(g.hp<=0)return over('Mobilmu hancur');
   }
@@ -155,7 +161,7 @@ function update(dt){
 function vib(n){try{navigator.vibrate&&navigator.vibrate(n)}catch(e){}}
 function score(){return Math.floor(G.dist)+G.bonus}
 function over(why){
- G.on=false;NB.style.display='none';
+ G.on=false;NB.style.display='none';HB.style.display='none';
  var s=score(),nb=s>best;
  if(nb){best=s;try{localStorage.setItem('pr_best',best)}catch(e){}}
  showMenu('Tamat',why+'.<br>Skor <b>'+s+'</b> · '+Math.floor(G.dist)+' m'+(nb?'<br>Rekor baru!':'<br>Rekor: '+best),'Main lagi');
@@ -183,7 +189,7 @@ function drawVeh(o){
 }
 function drawPlayer(){
  var g=G;if(g.inv>0&&Math.floor(g.t*14)%2)return;
- X.save();X.translate(g.px,PY);X.rotate((g.tx-g.px)*.004);
+ X.save();X.translate(g.px+sx(PY),PY);X.rotate((g.tx-g.px)*.004+slope(PY));
  if(g.boosting){var gr=X.createLinearGradient(0,28,0,80);gr.addColorStop(0,'rgba(255,160,40,.9)');gr.addColorStop(1,'rgba(255,60,0,0)');X.fillStyle=gr;X.fillRect(-9,28,18,52+Math.random()*14)}
  X.fillStyle='rgba(0,0,0,.3)';X.fillRect(-14,-24,34,60);
  rr(-16,-30,32,60,9,'#ff4d6d');rr(-12,-14,24,12,3,'#14213d');rr(-12,10,24,9,3,'#14213d');
@@ -219,7 +225,7 @@ function draw(){
   X.restore();
  });
  g.pk.forEach(function(k){X.save();X.translate(sx(k.y),0);rr(k.x-10,k.y-12,20,24,4,'#2dc653');X.fillStyle='#fff';X.font='bold 9px Verdana';X.textAlign='center';X.fillText('BBM',k.x,k.y+3);X.restore()});
- g.obs.forEach(function(o){X.save();X.translate(sx(o.y),0);drawVeh(o);X.restore()});
+ g.obs.forEach(function(o){var a=slope(o.y)+(o.fl?0:(lx(o.lane)-o.x)*.012)+(o.rot||0);X.save();X.translate(sx(o.y)+o.x,o.y);X.rotate(a);X.translate(-o.x,-o.y);drawVeh(o);X.restore()});
  drawPlayer();
  // partikel
  g.pt.forEach(function(q){var a=cl(q.l/q.m,0,1);X.globalCompositeOperation=q.a?'lighter':'source-over';X.fillStyle='rgba('+q.c+','+(a*(q.a?1:.45))+')';X.beginPath();X.arc(q.x,q.y,q.s*(q.a?a:2-a),0,7);X.fill()});
@@ -245,7 +251,7 @@ function draw(){
   X.drawImage(O,0,0,W,H);
   // lampu belakang
   if(d>.05){X.globalCompositeOperation='lighter';
-   g.obs.forEach(function(v){var c=v.br>0?'rgba(255,40,40,.95)':'rgba(255,40,40,.6)';X.fillStyle=c;var by=v.y+v.h/2;
+   g.obs.forEach(function(v){if(v.fl)return;var c=v.br>0?'rgba(255,40,40,.95)':'rgba(255,40,40,.6)';X.fillStyle=c;var by=v.y+v.h/2;
     X.fillStyle='rgba(255,60,60,'+.25*g.w+')';X.fillRect((v.x+sx(v.y))-v.w/2+3,by,5,28*g.w);X.fillRect((v.x+sx(v.y))+v.w/2-8,by,5,28*g.w);X.fillStyle=c;if(v.t=='motor'){X.fillRect((v.x+sx(v.y))-2,by-3,4,3)}else{X.fillRect((v.x+sx(v.y))-v.w/2+2,by-4,7,4);X.fillRect((v.x+sx(v.y))+v.w/2-9,by-4,7,4)}});
    g.dec.forEach(function(e){if(e.t=='tiang'){var r3=X.createRadialGradient(e.ex,e.y,1,e.ex,e.y,22);r3.addColorStop(0,'rgba(255,220,130,'+d*.9+')');r3.addColorStop(1,'rgba(255,200,100,0)');X.fillStyle=r3;X.fillRect(e.ex-22,e.y-22,44,44)}});
    X.globalCompositeOperation='source-over'}
@@ -283,22 +289,34 @@ function loop(ts){
  if(G&&G.on){update(dt);if(G)draw()}
  requestAnimationFrame(loop);
 }
+var AC=null;
+function beep(){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();[420,520].forEach(function(f){var o=AC.createOscillator(),k=AC.createGain();o.type='square';o.frequency.value=f;k.gain.setValueAtTime(.06,AC.currentTime);k.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.45);o.connect(k);k.connect(AC.destination);o.start();o.stop(AC.currentTime+.45)})}catch(e){}}
+function honk(){
+ if(!G||!G.on||G.hk>0)return;G.hk=.8;beep();vib(20);
+ G.pop.push({x:G.px,y:PY-60,t:'Tiiin!',l:.9});
+ G.obs.forEach(function(o){
+  if(!o.fl&&o.y<PY&&PY-o.y<340&&Math.abs(o.x-G.px)<LW*.8){
+   var d=o.lane<=0?1:o.lane>=N-1?-1:(G.px<o.x?1:-1);
+   o.lane=cl(o.lane+d,0,N-1);o.ch=rnd(1.5,2.5);
+  }});
+}
 function showMenu(h,body,btn){
  M.innerHTML='<h1>'+h+'</h1><p>'+body+'</p><button id="go">'+btn+'</button>';
  M.style.display='flex';
  document.getElementById('go').onclick=start;
 }
-function start(){reset();M.style.display='none';NB.style.display='block';draw()}
+function start(){reset();M.style.display='none';NB.style.display='block';HB.style.display='block';draw()}
 function setTx(e){var r=C.getBoundingClientRect();if(G)G.tx=cl((e.clientX-r.left)/r.width*W,RX+16,RX+LW*N-16)}
 C.addEventListener('pointerdown',function(e){ptr=e.pointerId;setTx(e)});
 C.addEventListener('pointermove',function(e){if(ptr===e.pointerId)setTx(e)});
 window.addEventListener('pointerup',function(e){if(ptr===e.pointerId)ptr=null});
+HB.addEventListener('pointerdown',function(e){e.stopPropagation();honk()});
 NB.addEventListener('pointerdown',function(e){e.stopPropagation();boost=true});
 ['pointerup','pointercancel','pointerleave'].forEach(function(n){NB.addEventListener(n,function(){boost=false})});
-window.addEventListener('keydown',function(e){keys[e.key]=true;if(e.key==' ')e.preventDefault()});
+window.addEventListener('keydown',function(e){keys[e.key]=true;if(e.key=='h'||e.key=='H')honk();if(e.key==' ')e.preventDefault()});
 window.addEventListener('keyup',function(e){keys[e.key]=false});
 reset();G.on=false;draw();
-showMenu('PANTURA RUSH','Salip bus, truk, angkot, motor, dan becak di jalur Pantura. Siang berganti malam, cerah berganti hujan.<br><br>Geser jari di layar untuk menyetir (atau tombol panah). Tahan tombol NITRO untuk ngebut (atau Spasi). Lewati kendaraan dengan jarak tipis untuk isi nitro dan BBM.<br><span class="s">Rekor: '+best+'</span>','Mulai');
+showMenu('PANTURA RUSH','Salip bus, truk, angkot, motor, dan becak di jalur Pantura. Siang berganti malam, cerah berganti hujan.<br><br>Geser jari di layar untuk menyetir (atau tombol panah). Tahan tombol NITRO untuk ngebut (atau Spasi). Tekan KLAKSON (atau H) agar kendaraan di depan minggir. Lewati kendaraan dengan jarak tipis untuk isi nitro dan BBM.<br><span class="s">Rekor: '+best+'</span>','Mulai');
 requestAnimationFrame(loop);
 if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});
 })();

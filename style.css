@@ -11,3 +11,4 @@ canvas{width:100%;height:100%;display:block}
 #m .s{color:var(--mu);font-size:12px}
 button{font:800 16px Verdana,sans-serif;border:0;border-radius:10px;background:var(--ac);color:#1a1200;padding:14px 32px;margin-top:18px}
 #nb{position:absolute;right:14px;bottom:calc(18px + env(safe-area-inset-bottom,0px));width:76px;height:76px;border-radius:50%;padding:0;margin:0;font-size:13px;background:#ff5a1f;color:#fff;display:none;box-shadow:0 0 0 4px rgba(255,90,31,.3)}
+#hb{position:absolute;left:14px;bottom:calc(18px + env(safe-area-inset-bottom,0px));width:76px;height:76px;border-radius:50%;padding:0;margin:0;font-size:11px;background:#3a86ff;color:#fff;display:none;box-shadow:0 0 0 4px rgba(58,134,255,.3)}

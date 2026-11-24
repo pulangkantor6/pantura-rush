@@ -4,7 +4,9 @@ Game balap vertikal bergaya Road Fighter dengan nuansa jalur Pantura. PWA, tanpa
 
 ## Fitur
 - Kendaraan lokal: mobil, motor, angkot, bus, truk, becak
-- Jalan berbelok yang mendorong mobil ke luar tikungan
+- Jalan berbelok (tiap 3-5 jam game) yang mendorong mobil ke luar tikungan; kendaraan ikut miring mengikuti jalan
+- Klakson: kendaraan di depan minggir ke jalur samping
+- Tabrakan membuat kendaraan lain terpental ke bahu jalan
 - Siklus siang, senja, malam (lampu depan, lampu belakang, tiang lampu)
 - Cuaca cerah, mendung, hujan (jalan licin, genangan, petir)
 - Bensin, nitro, *near miss*, lubang jalan, nyawa
@@ -12,8 +14,8 @@ Game balap vertikal bergaya Road Fighter dengan nuansa jalur Pantura. PWA, tanpa
 - Offline lewat service worker, bisa dipasang ke layar utama
 
 ## Kontrol
-- HP: geser jari untuk menyetir, tahan tombol NITRO
-- PC: panah kiri/kanan atau A/D, Spasi untuk nitro
+- HP: geser jari untuk menyetir, tahan tombol NITRO, ketuk KLAKSON
+- PC: panah kiri/kanan atau A/D, Spasi untuk nitro, H untuk klakson
 
 ## Menjalankan lokal
 ```bash
