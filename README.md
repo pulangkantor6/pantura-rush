@@ -14,8 +14,8 @@ Game balap vertikal bergaya Road Fighter dengan nuansa jalur Pantura. PWA, tanpa
 - Offline lewat service worker, bisa dipasang ke layar utama
 
 ## Kontrol
-- HP: geser jari untuk menyetir, tahan tombol NITRO, ketuk KLAKSON
-- PC: panah kiri/kanan atau A/D, Spasi untuk nitro, H untuk klakson
+- HP: joystick kiri (dinamis atau tetap, diatur di menu) untuk menyetir; tombol GAS (maju ke depan layar), REM (mundur), KLAKSON
+- PC: panah kiri/kanan atau A/D untuk setir, panah atas/bawah atau W/S untuk gas/rem, H untuk klakson
 
 ## Menjalankan lokal
 ```bash
@@ -33,7 +33,10 @@ git push -u origin main
 Lalu di GitHub: Settings, Pages, Source: `main` / root. Setiap mengubah aset, naikkan `V` di `sw.js` agar cache diperbarui.
 
 ## Struktur
-`index.html`, `style.css`, `game.js` (seluruh logika), `sw.js`, `manifest.webmanifest`, `icons/`
+`index.html`, `style.css`, `game.js` (logika), `audio.js` (pengelola suara), `assets/sfx` dan `assets/music` (berkas suara, lihat README di dalamnya), `sw.js`, `manifest.webmanifest`, `icons/`
 
 ## Ide lanjutan
 Suara, garasi dan upgrade mobil, stage tol dan pegunungan, daily challenge, leaderboard.
+
+## Suara dan musik
+Letakkan berkas di `assets/sfx` dan `assets/music` sesuai nama di README masing-masing. Bila tidak ada, SFX memakai suara sintetis bawaan dan musik tidak diputar.
