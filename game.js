@@ -147,7 +147,8 @@ function svHud(){
  var f=Math.floor(g.t*4)%2,nm=S.k=='pom'?'PERTAMINA':(S.k=='pertamini'?'PERTAMINI':'BENGKEL'),sd=S.side<0?'kiri':'kanan';
  if(S.st=='warn'){
   X.fillStyle=f?'rgba(0,150,90,.88)':'rgba(0,110,70,.88)';X.fillRect(0,56,W,24);
-  X.fillStyle='#fff';X.font='bold 12px Verdana';X.textAlign='center';X.fillText(nm+' '+Math.ceil(S.t)+' dtk lagi, lajur '+sd,W/2,73);
+  var mRem=Math.max(1,Math.ceil(S.distWarn/5)*5);
+  X.fillStyle='#fff';X.font='bold 12px Verdana';X.textAlign='center';X.fillText(nm+' '+mRem+' m lagi, lajur '+sd,W/2,73);
   X.font='bold 28px Verdana';X.fillStyle=f?'#fff':'rgba(255,255,255,.4)';X.textAlign=S.side<0?'left':'right';X.fillText(S.side<0?'\u25C0':'\u25B6',S.side<0?8:W-8,330);
  }else if(!S.used&&S.y+SVL>120&&S.y<PY+40){
   X.fillStyle='rgba(0,0,0,.55)';X.fillRect(0,56,W,22);X.fillStyle='#ffd23f';X.font='bold 12px Verdana';X.textAlign='center';X.fillText('Geser ke '+sd+' untuk masuk '+nm,W/2,72);
@@ -155,7 +156,28 @@ function svHud(){
  if(g.auto){X.fillStyle='rgba(255,255,255,.85)';X.font='bold 11px Verdana';X.textAlign='center';X.fillText('AUTO DRIVE',W/2,H-94)}
 }
 function openService(){showCtl(false);renderService()}
-function closeService(){var g=G;if(!g||!g.pause)return;M.style.display='none';showCtl(true);g.pause=false;g.auto=3}
+function clearExitLane(){
+ var g=G;if(!g||!g.sv)return;
+ var exitLane=g.sv.side<0?0:N-1,safeLane=g.sv.side<0?N-1:0;
+ g.obs=g.obs.filter(function(o){
+  if(o.fl)return true;
+  // Jika NPC berada di lajur keluar atau terlalu dekat dengan posisi pemain saat keluar
+  if(o.lane==exitLane||Math.abs(o.x-lx(exitLane))<LW*1.15){
+   if(o.y>-120&&o.y<PY+140){
+    // Coba pindahkan ke lajur sisi seberang yang kosong
+    var moved=false;
+    var cands=g.sv.side<0?[2,3,1]:[1,0,2];
+    for(var i=0;i<cands.length;i++){
+     var nl=cands[i];
+     if(nl!=exitLane&&laneFree(o,nl)){o.lane=nl;o.x=lx(nl);moved=true;break;}
+    }
+    if(!moved)return false; // Hapus NPC penghalang agar jalur keluar 100% bersih
+   }
+  }
+  return true;
+ });
+}
+function closeService(){var g=G;if(!g||!g.pause)return;M.style.display='none';showCtl(true);g.pause=false;g.auto=3;g.inv=Math.max(g.inv,2.5);clearExitLane()}
 function renderService(){
  var g=G;if(!g||!g.pause||!g.sv)return;var k=g.sv.k,isFuel=(k=='pom'||k=='pertamini'),rt=(k=='pertamini'?1.5:RATE);
  var title=k=='pom'?'Pom Bensin Pertamina':(k=='pertamini'?'Pertamini (Eceran)':'Bengkel');
@@ -203,6 +225,7 @@ function spawnObs(){
  var r=Math.random(),t=r<.3?'mobil':r<.52?'motor':r<.67?'angkot':r<.77?'bus':r<.9?'truk':'becak';
  var lane=Math.floor(rnd(0,N));
  if(t=='becak')lane=Math.random()<.5?0:N-1;
+ if(G.auto>0&&G.sv){var exL=G.sv.side<0?0:N-1;if(lane==exL)lane=G.sv.side<0?N-1:0;}
  var busy={};
  G.obs.forEach(function(o){if(o.y<120)busy[o.lane]=1});
  if(Object.keys(busy).length>=N-1&&!busy[lane])return;
@@ -233,13 +256,13 @@ function update(dt){
  if(!g.auto)g.tx-=g.bend*55*(g.speed/300)*dt;
  if(g.sv){
  var S=g.sv;
- if(S.st=='warn'){S.t-=dt;S.tk-=dt;if(S.tk<=0){S.tk=1;PRAudio.play('warn',.6)}if(S.t<=0)S.st='on'}
+ if(S.st=='warn'){S.distWarn-=g.speed*dt/18;S.tk-=dt;if(S.tk<=0){S.tk=1;PRAudio.play('warn',.6)}if(S.distWarn<=0)S.st='on'}
  else{
   S.y+=g.speed*dt;
   var cxs=S.side<0?29:W-29,cyb=S.y+SVL/2;
   if(!S.used&&!g.auto&&svZone()&&(S.side<0?g.px<RX-4:g.px>RX+LW*N+4)){S.used=1;g.auto=1}
   if(g.auto==1){g.tx=cxs;g.slip=0;var D=PY-cyb;if(D<=3||(D<14&&g.speed<18)){g.speed=0;g.auto=2;g.pause=true;openService()}}
-  else if(g.auto==3){g.slip=0;var mg=PY-S.y<210;g.tx=mg?lx(S.side<0?0:N-1):cxs;if(mg&&Math.abs(g.px-g.tx)<5){g.auto=0;g.tx=g.px}}
+  else if(g.auto==3){g.slip=0;clearExitLane();var mg=PY-S.y<210;g.tx=mg?lx(S.side<0?0:N-1):cxs;if(mg&&Math.abs(g.px-g.tx)<5){g.auto=0;g.tx=g.px;g.inv=Math.max(g.inv,1.8)}}
   if(S.y>H+20){if(S.k=='bengkel'&&g.tb<0)g.tb=g.t;g.sv=null;g.svT=rnd(6,10);if(g.auto)g.auto=0}
  }
 }else if(!g.auto){
@@ -247,9 +270,9 @@ function update(dt){
  if(g.svT<=0){g.svN++;var k2='pom';
   if(g.svN==1)k2='pom';
   else if(g.svN==2)k2='bengkel';
-  else{var rsv=Math.random();k2=rsv<.65?'pertamini':(rsv<.90?'bengkel':'pom');}
+  else{var rsv=Math.random();k2=rsv<.50?'pertamini':(rsv<.80?'bengkel':'pom');}
   g.lastK=k2;
-  g.cb=CB;g.sv={k:k2,side:Math.random()<.5?-1:1,st:'warn',t:3,y:-SVL,used:0,tk:0};
+  g.cb=CB;g.sv={k:k2,side:Math.random()<.5?-1:1,st:'warn',t:3,distWarn:160,y:-SVL,used:0,tk:0};
   var popTxt=k2=='pom'?'Pom bensin Pertamina di depan!':(k2=='pertamini'?'Pertamini di depan!':'Bengkel di depan!');
   g.pop.push({x:W/2,y:215,t:popTxt,l:2});PRAudio.play('warn')}
 }
@@ -606,14 +629,39 @@ var stick={on:false,id:null,ox:0,oy:0,x:0},SR=48;
 function stickMove(e){var r=WR.getBoundingClientRect(),dx=e.clientX-r.left-stick.ox,dy=e.clientY-r.top-stick.oy,l=Math.hypot(dx,dy)||1,k=Math.min(1,SR/l);
  KN.style.transform='translate('+dx*k+'px,'+dy*k+'px)';var v=cl(dx/SR,-1,1);stick.x=Math.abs(v)<.1?0:(v>0?1:-1)*(Math.abs(v)-.1)/.9}
 function stickEnd(){stick.on=false;stick.id=null;stick.x=0;KN.style.transform='';if(cfg.mode=='dyn')SB.style.display='none'}
-SZ.addEventListener('pointerdown',function(e){e.preventDefault();if(stick.on)return;stick.on=true;stick.id=e.pointerId;try{SZ.setPointerCapture(e.pointerId)}catch(x){}
+function isExcludedZone(e){
+ var r=WR.getBoundingClientRect();
+ var lxPos=e.clientX-r.left,lyPos=e.clientY-r.top;
+ // Konversi ke koordinat logika game (W=360, H=640)
+ var gx=lxPos/r.width*W,gy=lyPos/r.height*H;
+ // Kecualikan area speedometer di bawah tengah (cx=W/2, cy=H-18, radius ~52)
+ if(Math.hypot(gx-W/2,gy-(H-18))<=56)return true;
+ // Kecualikan area HUD atas (y < 54)
+ if(gy<54)return true;
+ // Kecualikan area tombol gas, rem, dan klakson (#pad)
+ if(PAD&&PAD.style.display!='none'){
+  var pr=PAD.getBoundingClientRect();
+  if(e.clientX>=pr.left-8&&e.clientX<=pr.right+8&&e.clientY>=pr.top-8&&e.clientY<=pr.bottom+8)return true;
+ }
+ return false;
+}
+SZ.addEventListener('pointerdown',function(e){
+ if(stick.on)return;
+ if(cfg.mode=='dyn'&&isExcludedZone(e))return;
+ e.preventDefault();
+ stick.on=true;stick.id=e.pointerId;try{SZ.setPointerCapture(e.pointerId)}catch(x){}
  var r=WR.getBoundingClientRect();
  if(cfg.mode=='dyn'){stick.ox=e.clientX-r.left;stick.oy=e.clientY-r.top;SB.style.left=stick.ox+'px';SB.style.top=stick.oy+'px';SB.style.display='block'}
  else{var b=SB.getBoundingClientRect();stick.ox=b.left+b.width/2-r.left;stick.oy=b.top+b.height/2-r.top}
  stickMove(e)});
 SZ.addEventListener('pointermove',function(e){if(stick.on&&e.pointerId===stick.id)stickMove(e)});
 ['pointerup','pointercancel'].forEach(function(n){SZ.addEventListener(n,function(e){if(e.pointerId===stick.id)stickEnd()})});
-function showCtl(v){PAD.style.display=v?'flex':'none';SZ.style.display=v?'block':'none';stickEnd();gasOn=false;brkOn=false;
+function showCtl(v){PAD.style.display=v?'flex':'none';SZ.style.display=v?'block':'none';
+ if(SZ){
+  if(cfg.mode=='dyn'){SZ.style.left='0';SZ.style.top='0';SZ.style.right='0';SZ.style.bottom='0';SZ.style.width='100%';SZ.style.height='100%';}
+  else{SZ.style.left='0';SZ.style.top='0';SZ.style.right='';SZ.style.bottom='0';SZ.style.width='50%';SZ.style.height='100%';}
+ }
+ stickEnd();gasOn=false;brkOn=false;
  SB.className=cfg.mode=='fix'?'fix':'';SB.style.left='';SB.style.top='';SB.style.display=(v&&cfg.mode=='fix')?'block':'none'}
 function hold(id,on,off){var b=document.getElementById(id);b.addEventListener('pointerdown',function(e){e.preventDefault();try{b.setPointerCapture(e.pointerId)}catch(x){}on()});['pointerup','pointercancel'].forEach(function(n){b.addEventListener(n,off)})}
 (function(){
@@ -644,7 +692,7 @@ WR.addEventListener('contextmenu',function(e){e.preventDefault()});
 window.addEventListener('keydown',function(e){keys[e.key]=true;if(e.key=='h'||e.key=='H')honk();if(e.key==' ')e.preventDefault()});
 window.addEventListener('keyup',function(e){keys[e.key]=false});
 reset();G.on=false;saveCfg();draw();
-showMenu('PANTURA RUSH','Salip bus, truk, angkot, motor, dan becak di jalur Pantura. Siang berganti malam, cerah berganti hujan.<br><br>Setir pakai joystick kiri (PC: panah kiri/kanan). GAS membawa mobil maju ke depan layar, REM memundurkannya (PC: panah atas/bawah). Tekan KLAKSON (atau H) agar kendaraan di depan minggir. Lewati kendaraan dengan jarak tipis untuk isi nitro dan koin. Kumpulkan koin untuk isi BBM di Pom Bensin dan upgrade di Bengkel (masuk lewat lajur samping saat ada peringatan). Kamu hanya kalah kalau bensin habis, dan tabrakan membuat tangki bocor.<br><span class="s">Rekor: '+best+'</span>','Mulai');
+showMenu('PANTURA RUSH','Salip bus, truk, angkot, motor, dan becak di jalur Pantura. Siang berganti malam, cerah berganti hujan.<br><br>Setir pakai joystick (PC: panah kiri/kanan). GAS membawa mobil maju ke depan layar, REM memundurkannya (PC: panah atas/bawah). Tekan KLAKSON (atau H) agar kendaraan di depan minggir. Lewati kendaraan dengan jarak tipis untuk isi nitro dan koin. Kumpulkan koin untuk isi BBM di Pom Bensin dan upgrade di Bengkel (masuk lewat lajur samping saat ada peringatan). Kamu hanya kalah kalau bensin habis, dan tabrakan membuat tangki bocor.<br><span class="s">Rekor: '+best+'</span>','Mulai');
 requestAnimationFrame(loop);
 if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});
 })();
