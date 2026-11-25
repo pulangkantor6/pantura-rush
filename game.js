@@ -31,11 +31,11 @@ var ICON_PATHS={
 for(var ik in ICON_PATHS){(function(k,src){var im=new Image();im.src=src;ICONS[k]=im})(ik,ICON_PATHS[ik])}
 
 var AUDIO_PATHS={
- sfx_gas:'audio/gas.mp3',
- sfx_rem:'audio/rem.mp3',
- mus_warning:'audio/warning.mp3',
- sfx_buy_ok:'audio/buy_ok.mp3',
- sfx_buy_fail:'audio/buy_fail.mp3'
+ sfx_gas:'assets/sfx/gas.mp3',
+ sfx_rem:'assets/sfx/rem.mp3',
+ mus_warning:'assets/music/warning.mp3',
+ sfx_buy_ok:'assets/sfx/buy_ok.mp3',
+ sfx_buy_fail:'assets/sfx/buy_fail.mp3'
 };
 var AUDIOS={},AUDIO_ERR={},SYNTH={gas:null,rem:null,warnTimer:null,warnStep:0};
 for(var ak in AUDIO_PATHS){(function(k,src){
