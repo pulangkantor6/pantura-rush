@@ -429,7 +429,7 @@ function shopIconHtml(key){
  var src=ICON_PATHS[key]||'';
  var svg=SHOP_SVGS[key]||SHOP_SVGS.shop_repair;
  return '<span style="width:26px;height:26px;border-radius:7px;background:rgba(0,0,0,.22);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">'+
-  '<img src="'+src+'" alt="" style="width:20px;height:20px;object-fit:contain" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">'+
+  '<img src="'+src+'" alt="" style="width:20px;height:20px;object-fit:contain" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'inline-flex\'">'+
   '<span style="display:none;align-items:center;justify-content:center">'+svg+'</span>'+
  '</span>';
 }
@@ -1428,7 +1428,6 @@ reset();G.on=false;saveCfg();draw();
 showMainScreen();
 requestAnimationFrame(loop);
 if('serviceWorker' in navigator){
- if(window.caches)caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k)})});
- window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=8').then(function(r){r.update()}).catch(function(){})});
+ window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').then(function(r){r.update()}).catch(function(){})});
 }
 })();
