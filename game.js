@@ -53,17 +53,34 @@ var AUDIO_PATHS={
  sfx_buy_ok:'assets/sfx/buy_ok.mp3',
  sfx_buy_fail:'assets/sfx/buy_fail.mp3'
 };
-var AUDIOS={},AUDIO_BUFS={},AUDIO_ERR={},SYNTH={gas:null,rem:null,warnTimer:null,warnStep:0,hornBufSrc:null};
+var AUDIOS={},AUDIO_BUFS={},AUDIO_LOADING={},AUDIO_ERR={},SYNTH={gas:null,rem:null,warnTimer:null,warnStep:0,hornBufSrc:null};
+function decodeAB(k,ab){
+ var ctx=getAC();
+ if(!ctx||!ctx.decodeAudioData){AUDIO_LOADING[k]=false;return;}
+ ctx.decodeAudioData(ab,function(buf){
+  AUDIO_BUFS[k]=buf;
+  AUDIO_LOADING[k]=false;
+ },function(){
+  AUDIO_ERR[k]=true;
+  AUDIO_LOADING[k]=false;
+ });
+}
 function loadAudioBuffer(k,src){
- fetch(src).then(function(r){
-  if(!r.ok)throw new Error('404');
-  return r.arrayBuffer();
- }).then(function(ab){
-  var ctx=getAC();
-  if(ctx&&ctx.decodeAudioData){
-   ctx.decodeAudioData(ab,function(buf){AUDIO_BUFS[k]=buf},function(){AUDIO_ERR[k]=true});
-  }
- }).catch(function(){AUDIO_ERR[k]=true});
+ if(AUDIO_BUFS[k]||AUDIO_LOADING[k]||AUDIO_ERR[k])return;
+ AUDIO_LOADING[k]=true;
+ if(window.fetch){
+  fetch(src).then(function(r){
+   if(!r.ok)throw new Error('404');
+   return r.arrayBuffer();
+  }).then(function(ab){decodeAB(k,ab)}).catch(function(){
+   try{
+    var xhr=new XMLHttpRequest();xhr.open('GET',src,true);xhr.responseType='arraybuffer';
+    xhr.onload=function(){if(xhr.response)decodeAB(k,xhr.response);else{AUDIO_ERR[k]=true;AUDIO_LOADING[k]=false;}};
+    xhr.onerror=function(){AUDIO_ERR[k]=true;AUDIO_LOADING[k]=false;};
+    xhr.send();
+   }catch(e){AUDIO_ERR[k]=true;AUDIO_LOADING[k]=false;}
+  });
+ }
 }
 for(var ak in AUDIO_PATHS){(function(k,src){
  var au=new Audio();au.preload='auto';au.src=src;
@@ -76,7 +93,7 @@ for(var ak in AUDIO_PATHS){(function(k,src){
 })(ak,AUDIO_PATHS[ak])}
 
 function getAC(){
- if(!AC)try{AC=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}
+ if(!AC)try{AC=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'})}catch(e){try{AC=new(window.AudioContext||window.webkitAudioContext)()}catch(e2){}}
  if(AC&&AC.state==='suspended')try{AC.resume()}catch(e){}
  return AC;
 }
@@ -188,14 +205,12 @@ function playCustomAudio(k,on){
     var srcNode=ctx.createBufferSource();
     srcNode.buffer=AUDIO_BUFS[k];
     srcNode.connect(ctx.destination);
-    srcNode.start(0);
+    srcNode.start(ctx.currentTime);
     if(k.indexOf('sfx_horn_')===0)SYNTH.hornBufSrc=srcNode;
     return;
    }catch(e){}
   }
-  if(a&&!AUDIO_ERR[k]){
-   try{a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){synthOnce(synthKey)});return}catch(e){}
-  }
+  if(!AUDIO_BUFS[k]&&!AUDIO_ERR[k])loadAudioBuffer(k,AUDIO_PATHS[k]);
   synthOnce(synthKey);
   return;
  }
@@ -468,32 +483,60 @@ var SHOP_SVGS={
  shop_horn:'<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>',
  shop_jerrycan:'<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M18 4h-4V2h-4v2H6C4.9 4 4 4.9 4 6v14c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 13h-2v-3H8v-2h3V9h2v3h3v2h-3v3z"/></svg>'
 };
-function shopIconHtml(key){
+function shopIconHtml(key,sz){
+ var s=sz||42;
  var src=ICON_PATHS[key]||'';
  var svg=SHOP_SVGS[key]||SHOP_SVGS.shop_repair;
- return '<span style="width:26px;height:26px;border-radius:7px;background:rgba(0,0,0,.22);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">'+
-  '<img src="'+src+'" alt="" style="width:20px;height:20px;object-fit:contain" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'inline-flex\'">'+
-  '<span style="display:none;align-items:center;justify-content:center">'+svg+'</span>'+
+ return '<span style="width:'+s+'px;height:'+s+'px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;filter:drop-shadow(0 3px 6px rgba(0,0,0,.45))">'+
+  '<img src="'+src+'" alt="" style="width:'+s+'px;height:'+s+'px;object-fit:contain;display:block" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'inline-flex\'">'+
+  '<span style="display:none;align-items:center;justify-content:center;transform:scale(1.45)">'+svg+'</span>'+
  '</span>';
 }
 function renderService(msg){
  var g=G;if(!g||!g.pause||!g.sv)return;var k=g.sv.k,isFuel=(k=='pom'||k=='pertamini'),rt=(k=='pertamini'?1.5:RATE);
- var title=k=='pom'?'Pom Bensin Pertamina':(k=='pertamini'?'Pertamini (Eceran)':'Bengkel');
- var h='<h1 style="font-size:26px">'+title+'</h1><p>Koin: <b>'+g.coins+'</b> · Bensin: <b>'+Math.ceil(g.fuel)+'/'+g.cap+' L</b></p>';
- if(msg)h+='<p style="color:'+msg.c+';font-weight:bold;font-size:13px;margin:4px 0">'+msg.t+'</p>';
+ var title=k=='pom'?'Pom Bensin Pertamina':(k=='pertamini'?'Pertamini Eceran':'Bengkel & Toko');
+ var accent=k=='pom'?'#ef4444':(k=='pertamini'?'#f59e0b':'#38bdf8');
+ var h='<div style="width:92%;max-width:324px;max-height:92%;overflow-y:auto;background:linear-gradient(180deg,rgba(15,23,42,.96),rgba(10,15,28,.98));border:1.5px solid rgba(255,255,255,.16);border-radius:20px;padding:14px 14px 16px;box-sizing:border-box;box-shadow:0 16px 40px rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center">';
+ h+='<div style="width:100%;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.1);text-align:center">'+
+  '<div style="font:bold 10px Verdana;letter-spacing:1.5px;color:'+accent+';text-transform:uppercase;margin-bottom:3px">'+(isFuel?'PENGISIAN BAHAN BAKAR':'SERVIS & UPGRADE')+'</div>'+
+  '<h1 style="font-size:21px;margin:0 0 8px;line-height:1.15">'+title+'</h1>'+
+  '<div style="display:flex;justify-content:center;gap:8px;font:bold 11.5px Verdana">'+
+   '<span style="background:rgba(255,210,63,.14);border:1px solid rgba(255,210,63,.35);color:#ffd23f;padding:4px 10px;border-radius:20px">🪙 '+g.coins+' Koin</span>'+
+   '<span style="background:rgba(45,198,83,.14);border:1px solid rgba(45,198,83,.35);color:#4ade80;padding:4px 10px;border-radius:20px">⛽ '+Math.ceil(g.fuel)+'/'+g.cap+' L</span>'+
+  '</div>'+
+ '</div>';
+ if(msg)h+='<div style="width:100%;background:rgba(255,255,255,.07);border-radius:10px;padding:6px 10px;margin-top:8px;color:'+msg.c+';font-weight:bold;font-size:12px;text-align:center">'+msg.t+'</div>';
  if(isFuel){
   var mx=Math.floor(Math.min(g.cap-g.fuel,g.coins*rt));
-  var note=k=='pertamini'?'Harga eceran: 2 koin = 3 Liter (stok bebas).':'Harga resmi: 1 koin = '+RATE+' Liter.';
-  h+='<p class="s">'+note+' Geser untuk memilih jumlah.</p><input id="fs" type="range" min="0" max="'+mx+'" value="'+mx+'" style="width:240px"'+(mx<=0?' disabled':'')+'><p id="fc"></p><button id="fb" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;'+(mx<=0?'opacity:.55':'')+'">'+shopIconHtml('shop_fuel')+'<span>Isi bensin</span></button>';
+  var note=k=='pertamini'?'Tarif eceran: 2 koin = 3 Liter':'Tarif resmi: 1 koin = '+RATE+' Liter';
+  h+='<div style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:12px;margin-top:10px;box-sizing:border-box;text-align:center">'+
+   '<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px">'+
+    shopIconHtml('shop_fuel',52)+
+    '<div style="text-align:left"><div style="font:bold 13px Verdana;color:#fff">'+note+'</div><div style="font:11px Verdana;color:#94a3b8;margin-top:2px">Geser untuk atur liter</div></div>'+
+   '</div>'+
+   '<input id="fs" type="range" min="0" max="'+mx+'" value="'+mx+'" style="width:100%;margin:6px 0;accent-color:#ffd23f"'+(mx<=0?' disabled':'')+'>'+
+   '<p id="fc" style="font:bold 14px Verdana;color:#ffd23f;margin:6px 0 10px"></p>'+
+   '<button id="fb" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:12px;font-size:14px;'+(mx<=0?'opacity:.5':'')+'"><span>⛽ Isi Bensin Sekarang</span></button>'+
+  '</div>';
  }else{
-  var bt=function(id,ico,t,c,ok){
+  var bt=function(id,ico,titleTxt,subTxt,c,ok){
    var canBuy=(ok&&g.coins>=c);
-   return '<button id="'+id+'" style="display:flex;align-items:center;gap:9px;text-align:left;margin:6px auto 0;font-size:12px;padding:8px 11px;width:282px;'+(canBuy?'':'opacity:.55;')+'">'+shopIconHtml(ico)+'<span style="flex:1;line-height:1.25">'+t+'</span><span style="background:rgba(0,0,0,.22);padding:4px 7px;border-radius:6px;font-size:11px;white-space:nowrap">'+c+' 🪙</span></button>';
+   return '<button id="'+id+'" style="display:flex;align-items:center;gap:11px;text-align:left;margin:0;padding:8px 10px;width:100%;border-radius:13px;background:'+(canBuy?'rgba(255,255,255,.08)':'rgba(255,255,255,.03)')+';border:1px solid '+(canBuy?'rgba(255,255,255,.18)':'rgba(255,255,255,.07)')+';color:#fff;'+(canBuy?'':'opacity:.52;')+'">'+
+    shopIconHtml(ico,42)+
+    '<span style="flex:1;min-width:0"><span style="display:block;font:bold 12px Verdana;color:#fff;line-height:1.25">'+titleTxt+'</span><span style="display:block;font:10px Verdana;color:#cbd5e1;margin-top:2px;line-height:1.25">'+subTxt+'</span></span>'+
+    '<span style="background:rgba(255,210,63,.16);border:1px solid rgba(255,210,63,.4);color:#ffd23f;padding:5px 8px;border-radius:9px;font:bold 11px Verdana;white-space:nowrap;flex-shrink:0">'+c+' 🪙</span>'+
+   '</button>';
   };
-  h+='<p class="s">Bocor sekarang: '+g.leak.toFixed(1)+' L/dtk</p>'+bt('b1','shop_repair','Tambal bocor + perbaiki bodi',8,g.leak>.02||g.dents.length>0)+bt('b2','shop_armor','Perkuat bodi Lv '+g.ar+'/4 (bocor -18%)',ARC[Math.min(g.ar,3)],g.ar<4)+bt('b3','shop_tank','Tangki +25 L Lv '+g.tl+'/4 (kapasitas '+g.cap+' L)',TKC[Math.min(g.tl,3)],g.tl<4)+bt('b4','shop_horn','Klakson Lv '+g.hl+'/3 (jangkauan '+HR[g.hl]+(g.hl<3?' > '+HR[g.hl+1]:'')+', bus/truk 1x)',HLC[Math.min(g.hl,2)],g.hl<3);
-  h+=bt('b5','shop_jerrycan','Bensin eceran (+15 L)',7,g.fuel<g.cap);
+  h+='<div style="width:100%;display:flex;flex-direction:column;gap:7px;margin-top:10px">'+
+   '<div style="font:11px Verdana;color:'+(g.leak>.02?'#fca5a5':'#94a3b8')+';text-align:center;margin-bottom:2px">Kebocoran tangki: <b>'+g.leak.toFixed(1)+' L/dtk</b></div>'+
+   bt('b1','shop_repair','Perbaiki Bodi & Bocor','Tambal tangki & hilangkan penyok',8,g.leak>.02||g.dents.length>0)+
+   bt('b2','shop_armor','Perkuat Bodi (Lv '+g.ar+'/4)','Kurangi risiko bocor -18%',ARC[Math.min(g.ar,3)],g.ar<4)+
+   bt('b3','shop_tank','Tangki +25 L (Lv '+g.tl+'/4)','Kapasitas saat ini '+g.cap+' L',TKC[Math.min(g.tl,3)],g.tl<4)+
+   bt('b4','shop_horn','Upgrade Klakson (Lv '+g.hl+'/3)','Jangkauan '+HR[g.hl]+(g.hl<3?' → '+HR[g.hl+1]:'')+' · Bus/Truk 1x',HLC[Math.min(g.hl,2)],g.hl<3)+
+   bt('b5','shop_jerrycan','Bensin Eceran (+15 L)','Isi darurat langsung ke tangki',7,g.fuel<g.cap)+
+  '</div>';
  }
- h+='<button id="lv" style="background:#3a86ff;color:#fff;margin-top:14px">Lanjut jalan</button>';
+ h+='<button id="lv" style="width:100%;background:#3a86ff;color:#fff;margin-top:12px;padding:11px;border-radius:12px;font-size:14px">▶ Lanjut Jalan</button></div>';
  M.innerHTML=h;M.style.display='flex';
  var $=function(i){return document.getElementById(i)};
  if(isFuel){
@@ -962,13 +1005,24 @@ function loop(ts){
  if(G&&G.on&&!pauseState&&!layoutEdit){update(dt);if(G)draw()}
  requestAnimationFrame(loop);
 }
-var AC=null;
+var AC=null,AC_UNLOCKED=false;
+try{AC=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'})}catch(e){try{AC=new(window.AudioContext||window.webkitAudioContext)()}catch(e2){}}
+function unlockAC(){
+ var ctx=getAC();if(!ctx)return;
+ if(ctx.state==='suspended')try{ctx.resume()}catch(e){}
+ if(!AC_UNLOCKED&&ctx.state==='running'){
+  try{
+   var b=ctx.createBuffer(1,1,22050),s=ctx.createBufferSource();
+   s.buffer=b;s.connect(ctx.destination);s.start(0);
+   AC_UNLOCKED=true;
+  }catch(e){}
+ }
+}
 function beep(){
  stopHornAudio();
  var lv=G?cl(G.hl||0,0,3):0;
  if(cfg.sfx){
   playCustomAudio('sfx_horn_'+lv,true);
-  if(AUDIO_ERR['sfx_horn_'+lv])PRAudio.play(lv>0?'horn_strong':'horn');
  }
 }
 function honk(){
@@ -1517,17 +1571,17 @@ function hold(id,on,off){var b=document.getElementById(id);b.addEventListener('p
 })();
 hold('bg',function(){if(pauseState||layoutEdit)return;gasOn=true;playCustomAudio('sfx_gas',true)},function(){gasOn=false;playCustomAudio('sfx_gas',false)});
 hold('br',function(){if(pauseState||layoutEdit)return;brkOn=true;playCustomAudio('sfx_rem',true)},function(){brkOn=false;playCustomAudio('sfx_rem',false)});
-hold('bh',honk,stopHornAudio);
+hold('bh',function(){unlockAC();honk()},function(){});
 WR.addEventListener('contextmenu',function(e){e.preventDefault()});
-['pointerdown','keydown'].forEach(function(n){window.addEventListener(n,function(){
+['pointerdown','touchstart','keydown'].forEach(function(n){window.addEventListener(n,function(){
  PRAudio.init();
- getAC();
+ unlockAC();
  for(var k in AUDIO_PATHS){
   if((k.indexOf('sfx_horn_')===0||k==='sfx_buy_ok'||k==='sfx_buy_fail')&&!AUDIO_BUFS[k]&&!AUDIO_ERR[k]){
    loadAudioBuffer(k,AUDIO_PATHS[k]);
   }
  }
-})});
+},{passive:true})});
 
 window.addEventListener('keydown',function(e){
  if((e.key=='Escape'||e.key=='p'||e.key=='P')&&G&&G.on&&!G.pause&&!layoutEdit){
@@ -1545,7 +1599,6 @@ window.addEventListener('keyup',function(e){
  keys[e.key]=false;
  if(e.key=='ArrowUp'||e.key=='w'||e.key=='W')playCustomAudio('sfx_gas',false);
  if(e.key=='ArrowDown'||e.key=='s'||e.key=='S')playCustomAudio('sfx_rem',false);
- if(e.key=='h'||e.key=='H')stopHornAudio();
 });
 reset();G.on=false;saveCfg();draw();
 showMainScreen();
