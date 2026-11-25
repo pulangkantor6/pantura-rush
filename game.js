@@ -140,6 +140,8 @@ function synthOnce(type){
    [[392,0,0.12],[493.88,0.13,0.12],[587.33,0.26,0.24]],
    [[392,0,0.11],[493.88,0.12,0.11],[587.33,0.24,0.11],[659.25,0.36,0.12],[783.99,0.49,0.26]]
   ];
+  stopHornAudio();
+  SYNTH.hornNodes=[];
   var seq=patterns[cl(lv,0,3)];
   seq.forEach(function(step){
    var o=ctx.createOscillator(),o2=ctx.createOscillator(),g=ctx.createGain(),t0=ctx.currentTime+step[1];
@@ -147,6 +149,7 @@ function synthOnce(type){
    o2.type='square';o2.frequency.setValueAtTime(step[0]*0.5,t0);
    g.gain.setValueAtTime(0.14,t0);g.gain.exponentialRampToValueAtTime(0.001,t0+step[2]);
    o.connect(g);o2.connect(g);g.connect(ctx.destination);o.start(t0);o2.start(t0);o.stop(t0+step[2]+0.01);o2.stop(t0+step[2]+0.01);
+   SYNTH.hornNodes.push(o,o2);
   });
  }
 }
@@ -195,10 +198,21 @@ function playCustomAudio(k,on){
  }
 }
 
+function stopHornAudio(){
+ for(var i=0;i<=3;i++){
+  var ha=AUDIOS['sfx_horn_'+i];
+  if(ha&&!ha.paused){try{ha.pause();ha.currentTime=0}catch(e){}}
+ }
+ if(SYNTH.hornNodes){
+  SYNTH.hornNodes.forEach(function(n){try{n.stop()}catch(e){}});
+  SYNTH.hornNodes=null;
+ }
+}
 function stopAllCustomAudio(){
  playCustomAudio('sfx_gas',false);
  playCustomAudio('sfx_rem',false);
  playCustomAudio('mus_warning',false);
+ stopHornAudio();
 }
 
 var TYPES={
@@ -921,6 +935,7 @@ function loop(ts){
 }
 var AC=null;
 function beep(){
+ stopHornAudio();
  var lv=G?cl(G.hl||0,0,3):0;
  if(cfg.sfx){
   playCustomAudio('sfx_horn_'+lv,true);
@@ -946,14 +961,20 @@ function honk(){
  });
 }
 var deferredPrompt=null;
+var appInstalledFlag=false;
+try{appInstalledFlag=localStorage.getItem('pr_installed')==='1'}catch(e){}
 window.addEventListener('beforeinstallprompt',function(e){
  e.preventDefault();deferredPrompt=e;
+ appInstalledFlag=false;
+ try{localStorage.removeItem('pr_installed')}catch(err){}
  var ib=document.getElementById('inst_card');if(ib)ib.style.display='flex';
 });
 window.addEventListener('appinstalled',function(){
- deferredPrompt=null;
+ deferredPrompt=null;appInstalledFlag=true;
+ try{localStorage.setItem('pr_installed','1')}catch(e){}
  var ib=document.getElementById('inst_card');if(ib)ib.style.display='none';
 });
+var swReg=null,swUpdateReady=false;
 
 /* ---------- STYLE ANIMASI & FONT ARCADE PANTURA RUSH ---------- */
 (function(){
@@ -968,51 +989,73 @@ window.addEventListener('appinstalled',function(){
 
 /* ---------- MAIN SCREEN (ARCADE START + BACKGROUND VIDEO/GAMBAR + KARTU INSTALL) ---------- */
 var installCardDismissed=false;
+function applyAppUpdate(){
+ var btn=document.getElementById('upd_btn');
+ if(btn){btn.textContent='⏳ Mengunduh...';btn.disabled=true;}
+ var doReload=function(){
+  if(swReg&&swReg.waiting){
+   swReg.waiting.postMessage({type:'SKIP_WAITING'});
+  }
+  setTimeout(function(){window.location.reload()},350);
+ };
+ if(window.caches){
+  caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}).then(function(){
+   if(swReg)swReg.update().then(doReload).catch(doReload);
+   else doReload();
+  }).catch(doReload);
+ }else{
+  doReload();
+ }
+}
 function showMainScreen(){
  lastMenu=['main'];
  var isStandalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone;
- var showInstall=(!isStandalone&&!installCardDismissed);
+ var showInstall=(!isStandalone&&!appInstalledFlag&&!installCardDismissed);
 
  var installCardHTML='';
  if(showInstall){
-  installCardHTML='<div id="inst_card" style="position:relative;z-index:5;width:88%;max-width:305px;background:linear-gradient(135deg,rgba(15,23,42,.92),rgba(30,41,59,.92));border:1.5px solid rgba(45,198,83,.75);border-radius:14px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 24px rgba(0,0,0,.65);backdrop-filter:blur(4px);text-align:left">'+
-   '<div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#2dc653,#1b4332);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">📲</div>'+
+  installCardHTML='<div id="inst_card" style="position:relative;z-index:10;width:90%;max-width:312px;background:linear-gradient(135deg,rgba(15,23,42,.95),rgba(30,41,59,.95));border:1.5px solid #2dc653;border-radius:14px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 24px rgba(0,0,0,.75);backdrop-filter:blur(4px);text-align:left">'+
+   '<div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#2dc653,#1b4332);display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0">📲</div>'+
    '<div style="flex:1;min-width:0">'+
-    '<div style="font:bold 12px Verdana;color:#fff;margin-bottom:2px">Install Pantura Rush</div>'+
-    '<div style="font:10px Verdana;color:#cbd5e1;line-height:1.3">Main lebih lancar layar penuh & bisa offline!</div>'+
+    '<div style="font:bold 11.5px Verdana;color:#fff;margin-bottom:2px">Install Aplikasi</div>'+
+    '<div style="font:9.5px Verdana;color:#cbd5e1;line-height:1.3">Pasang di layar utama untuk main offline & layar penuh!</div>'+
    '</div>'+
    '<button id="inst_btn" style="background:#2dc653;color:#081c15;font:bold 11px Verdana;padding:7px 11px;border-radius:8px;margin:0;flex-shrink:0;cursor:pointer">Install</button>'+
    '<button id="inst_close" title="Tutup" style="background:transparent;color:#94a3b8;font:bold 14px Verdana;padding:2px 5px;margin:0;flex-shrink:0;cursor:pointer">✕</button>'+
   '</div>';
  }
 
+ var updateCardHTML='<div id="upd_card" style="position:relative;z-index:10;width:90%;max-width:312px;background:linear-gradient(135deg,rgba(30,58,138,.94),rgba(15,23,42,.95));border:1.5px solid #38bdf8;border-radius:12px;padding:8px 12px;margin-bottom:10px;display:'+(swUpdateReady?'flex':'none')+';align-items:center;justify-content:space-between;gap:8px;box-shadow:0 6px 20px rgba(0,0,0,.7)">'+
+  '<div style="text-align:left"><div style="font:bold 11px Verdana;color:#fff">🚀 Pembaruan Tersedia!</div><div style="font:9.5px Verdana;color:#bae6fd">Versi terbaru siap diunduh</div></div>'+
+  '<button id="upd_btn" style="background:#38bdf8;color:#082f49;font:bold 11px Verdana;padding:6px 11px;border-radius:8px;margin:0;flex-shrink:0;cursor:pointer">Update</button>'+
+ '</div>';
+
  M.innerHTML=
-  '<div id="main_screen" style="position:absolute;inset:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:16px 16px 26px;box-sizing:border-box;cursor:pointer;user-select:none">'+
-   /* Jalur Latar Belakang Video & Gambar */
+  '<div id="main_screen" style="position:absolute;inset:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:16px 16px 24px;box-sizing:border-box;cursor:pointer;user-select:none">'+
    '<img id="bg_img" src="'+MENU_BG_PATHS.image+'" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none" onerror="this.style.display=\'none\'">'+
    '<video id="bg_vid" autoplay loop muted playsinline preload="auto" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;pointer-events:none">'+
     '<source src="'+MENU_BG_PATHS.video+'" type="video/mp4">'+
    '</video>'+
-   /* Overlay gradasi gelap dramatis agar teks judul tetap terbaca tajam */
    '<div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 35%,rgba(10,15,28,.25) 0%,rgba(6,10,20,.78) 100%);z-index:2;pointer-events:none"></div>'+
 
-   /* Header Atas: Rekor & Tombol Setting Pojok Kanan Atas */
-   '<div style="position:relative;z-index:5;width:100%;display:flex;justify-content:space-between;align-items:center">'+
-    '<div style="background:rgba(15,23,42,.72);border:1px solid rgba(255,210,63,.4);border-radius:10px;padding:6px 10px;font:bold 11px Verdana;color:#ffd23f;backdrop-filter:blur(3px)">🏆 REKOR: '+best+'</div>'+
-    '<button id="main_cfg" title="Pengaturan" style="width:40px;height:40px;border-radius:12px;background:rgba(15,23,42,.78);border:1.5px solid rgba(255,255,255,.32);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;padding:0;margin:0;cursor:pointer;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,.45)">⚙</button>'+
+   '<div style="position:relative;z-index:10;width:100%;display:flex;justify-content:space-between;align-items:center">'+
+    '<div style="background:rgba(15,23,42,.78);border:1px solid rgba(255,210,63,.45);border-radius:10px;padding:6px 10px;font:bold 11px Verdana;color:#ffd23f;backdrop-filter:blur(3px)">🏆 REKOR: '+best+'</div>'+
+    '<div style="display:flex;gap:8px;align-items:center">'+
+     '<button id="main_chk_upd" title="Cek & Unduh Pembaruan" style="height:40px;padding:0 10px;border-radius:12px;background:rgba(15,23,42,.78);border:1.5px solid rgba(56,189,248,.5);color:#38bdf8;font:bold 11px Verdana;display:flex;align-items:center;gap:4px;margin:0;cursor:pointer;backdrop-filter:blur(4px)">🔄 Update</button>'+
+     '<button id="main_cfg" title="Pengaturan" style="width:40px;height:40px;border-radius:12px;background:rgba(15,23,42,.78);border:1.5px solid rgba(255,255,255,.32);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;padding:0;margin:0;cursor:pointer;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,.45)">⚙</button>'+
+    '</div>'+
    '</div>'+
 
-   /* Tengah: Judul Besar PANTURA RUSH */
-   '<div style="position:relative;z-index:5;text-align:center;margin-top:6px;pointer-events:none">'+
+   '<div style="position:relative;z-index:5;text-align:center;margin-top:4px;pointer-events:none">'+
     '<div style="display:inline-block;background:rgba(214,40,40,.9);color:#fff;font:bold 10px Verdana;letter-spacing:2.5px;padding:4px 12px;border-radius:20px;margin-bottom:8px;box-shadow:0 3px 10px rgba(0,0,0,.5)">JALUR UTAMA JAWA</div>'+
-    '<h1 class="pr-title" style="font-size:50px">PANTURA<br><span style="font-size:58px">RUSH</span></h1>'+
-    '<div style="margin-top:10px;font:11px Verdana;color:#e2e8f0;text-shadow:0 2px 6px rgba(0,0,0,.9)">Salip · Klakson · Kumpulkan Koin · Isi BBM</div>'+
+    '<h1 class="pr-title" style="font-size:48px">PANTURA<br><span style="font-size:56px">RUSH</span></h1>'+
+    '<div style="margin-top:8px;font:11px Verdana;color:#e2e8f0;text-shadow:0 2px 6px rgba(0,0,0,.9)">Salip · Klakson · Kumpulkan Koin · Isi BBM</div>'+
    '</div>'+
 
-   /* Bawah: Kartu Install (jika baru mulai) + PRESS START (TOUCH TO START) */
-   '<div style="position:relative;z-index:5;width:100%;display:flex;flex-direction:column;align-items:center">'+
+   '<div style="position:relative;z-index:10;width:100%;display:flex;flex-direction:column;align-items:center">'+
+    updateCardHTML+
     installCardHTML+
-    '<div id="press_start_area" style="padding:12px 24px;border-radius:16px;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,210,63,.55);backdrop-filter:blur(3px);text-align:center">'+
+    '<div id="press_start_area" style="padding:11px 24px;border-radius:16px;background:rgba(0,0,0,.5);border:1.5px solid rgba(255,210,63,.6);backdrop-filter:blur(3px);text-align:center">'+
      '<div class="pr-press" style="font-size:19px;color:#ffd23f">PRESS START</div>'+
      '<div style="font:bold 11px Verdana;color:#ffffff;letter-spacing:1.5px;margin-top:3px;opacity:.92">( TOUCH TO START )</div>'+
     '</div>'+
@@ -1034,12 +1077,38 @@ function showMainScreen(){
  var cfgBtn=document.getElementById('main_cfg');
  if(cfgBtn)cfgBtn.onclick=function(e){e.stopPropagation();openSettings('main')};
 
+ var chkUpdBtn=document.getElementById('main_chk_upd');
+ if(chkUpdBtn)chkUpdBtn.onclick=function(e){
+  e.stopPropagation();
+  chkUpdBtn.textContent='⏳ Cek...';
+  if(swReg){
+   swReg.update().then(function(){
+    if(swReg.waiting||swUpdateReady){
+     applyAppUpdate();
+    }else{
+     applyAppUpdate();
+    }
+   }).catch(function(){applyAppUpdate()});
+  }else{
+   applyAppUpdate();
+  }
+ };
+
+ var updBtn=document.getElementById('upd_btn');
+ if(updBtn)updBtn.onclick=function(e){e.stopPropagation();applyAppUpdate()};
+
+ var instCard=document.getElementById('inst_card');
+ if(instCard)instCard.onclick=function(e){e.stopPropagation()};
+
  var instBtn=document.getElementById('inst_btn');
  if(instBtn)instBtn.onclick=function(e){
   e.stopPropagation();
   if(deferredPrompt){
    deferredPrompt.prompt();
-   deferredPrompt.userChoice.then(function(){deferredPrompt=null;showMainScreen()});
+   deferredPrompt.userChoice.then(function(res){
+    if(res&&res.outcome==='accepted'){appInstalledFlag=true;try{localStorage.setItem('pr_installed','1')}catch(err){}}
+    deferredPrompt=null;showMainScreen();
+   });
   }else{
    alert('Untuk menginstall aplikasi Pantura Rush:\n\n• Android / Chrome: Ketuk menu titik tiga (⋮) di pojok kanan atas browser lalu pilih "Install aplikasi" atau "Tambahkan ke Layar utama".\n• iPhone / Safari: Ketuk tombol Bagikan (Share) lalu pilih "Add to Home Screen".');
   }
@@ -1049,8 +1118,7 @@ function showMainScreen(){
  if(instClose)instClose.onclick=function(e){
   e.stopPropagation();
   installCardDismissed=true;
-  var card=document.getElementById('inst_card');
-  if(card)card.style.display='none';
+  if(instCard)instCard.style.display='none';
  };
 
  var ms=document.getElementById('main_screen');
@@ -1105,38 +1173,48 @@ function resumeGame(){
 }
 
 function openSettings(from){
- M.innerHTML='<h1 style="font-size:24px">PENGATURAN</h1>'+
-  '<div style="display:flex;flex-direction:column;gap:8px;width:255px;margin-top:8px">'+
+ M.innerHTML='<div style="position:relative;z-index:20;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;pointer-events:auto">'+
+  '<h1 style="font-size:24px;margin-bottom:10px">PENGATURAN</h1>'+
+  '<div style="display:flex;flex-direction:column;gap:8px;width:260px">'+
   tg('st_ctrl','Kontrol Gas & Rem: '+(cfg.ctrl==='joy'?'Full Joystick':'Tombol Layar'),cfg.ctrl==='joy'?'#2b6cb0':'#2a3441')+
   tg('st_joy','Posisi Joystick: '+(cfg.mode=='dyn'?'Dinamis (Sentuh Bebas)':'Tetap (Kiri Bawah)'))+
   tg('st_sfx','Efek Suara (SFX): '+(cfg.sfx?'Hidup':'Mati'))+
   tg('st_mus','Musik & Peringatan: '+(cfg.mus?'Hidup':'Mati'))+
   tg('st_lay','📐 Atur Tata Letak Tombol & Speedo','#d97706')+
   '</div>'+
-  '<button id="st_back" style="background:#3a86ff;color:#fff;margin-top:16px;width:255px">✔ Selesai & Kembali</button>';
+  '<button id="st_back" type="button" style="position:relative;z-index:30;background:#3a86ff;color:#fff;margin-top:16px;width:260px;min-height:44px;font-weight:bold;cursor:pointer;touch-action:manipulation">✔ Selesai & Kembali</button>'+
+ '</div>';
  M.style.display='flex';
  var $=function(i){return document.getElementById(i)};
- $('st_ctrl').onclick=function(){
+ $('st_ctrl').onclick=function(e){
+  e.stopPropagation();
   cfg.ctrl=(cfg.ctrl==='btn'?'joy':'btn');
   saveCfg();applyControlLayout();openSettings(from);
  };
- $('st_joy').onclick=function(){
+ $('st_joy').onclick=function(e){
+  e.stopPropagation();
   cfg.mode=(cfg.mode=='dyn'?'fix':'dyn');
   saveCfg();openSettings(from);
  };
- $('st_sfx').onclick=function(){
+ $('st_sfx').onclick=function(e){
+  e.stopPropagation();
   cfg.sfx=cfg.sfx?0:1;saveCfg();openSettings(from);
  };
- $('st_mus').onclick=function(){
+ $('st_mus').onclick=function(e){
+  e.stopPropagation();
   cfg.mus=cfg.mus?0:1;if(!cfg.mus)playCustomAudio('mus_warning',false);
   saveCfg();openSettings(from);
  };
- $('st_lay').onclick=function(){openLayoutEditor(from)};
- $('st_back').onclick=function(){
+ $('st_lay').onclick=function(e){e.stopPropagation();openLayoutEditor(from)};
+ var goBack=function(e){
+  if(e){e.preventDefault();e.stopPropagation();}
   if(from==='pause')openPause();
   else if(from==='over'&&lastMenu&&lastMenu[0]==='over')showOverMenu(lastMenu[1],lastMenu[2],lastMenu[3]);
   else showMainScreen();
  };
+ var backBtn=$('st_back');
+ backBtn.onclick=goBack;
+ backBtn.addEventListener('touchend',goBack,{passive:false});
 }
 
 /* ---------- EDITOR TATA LETAK DRAG & DROP + SKALA 50% - 200% ---------- */
@@ -1403,7 +1481,7 @@ function hold(id,on,off){var b=document.getElementById(id);b.addEventListener('p
 })();
 hold('bg',function(){if(pauseState||layoutEdit)return;gasOn=true;playCustomAudio('sfx_gas',true)},function(){gasOn=false;playCustomAudio('sfx_gas',false)});
 hold('br',function(){if(pauseState||layoutEdit)return;brkOn=true;playCustomAudio('sfx_rem',true)},function(){brkOn=false;playCustomAudio('sfx_rem',false)});
-hold('bh',honk,function(){});
+hold('bh',honk,stopHornAudio);
 WR.addEventListener('contextmenu',function(e){e.preventDefault()});
 ['pointerdown','keydown'].forEach(function(n){window.addEventListener(n,function(){PRAudio.init()})});
 
@@ -1423,11 +1501,29 @@ window.addEventListener('keyup',function(e){
  keys[e.key]=false;
  if(e.key=='ArrowUp'||e.key=='w'||e.key=='W')playCustomAudio('sfx_gas',false);
  if(e.key=='ArrowDown'||e.key=='s'||e.key=='S')playCustomAudio('sfx_rem',false);
+ if(e.key=='h'||e.key=='H')stopHornAudio();
 });
 reset();G.on=false;saveCfg();draw();
 showMainScreen();
 requestAnimationFrame(loop);
 if('serviceWorker' in navigator){
- window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').then(function(r){r.update()}).catch(function(){})});
+ window.addEventListener('load',function(){
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(function(r){
+   swReg=r;
+   function notifyUpdate(){
+    swUpdateReady=true;
+    var uc=document.getElementById('upd_card');
+    if(uc)uc.style.display='flex';
+   }
+   if(r.waiting)notifyUpdate();
+   r.addEventListener('updatefound',function(){
+    var nw=r.installing;
+    if(nw)nw.addEventListener('statechange',function(){
+     if(nw.state==='installed'&&navigator.serviceWorker.controller)notifyUpdate();
+    });
+   });
+   r.update().catch(function(){});
+  }).catch(function(){});
+ });
 }
 })();
