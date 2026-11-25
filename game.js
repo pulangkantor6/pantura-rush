@@ -162,6 +162,12 @@ function playCustomAudio(k,on){
  }
 }
 
+function stopAllCustomAudio(){
+ playCustomAudio('sfx_gas',false);
+ playCustomAudio('sfx_rem',false);
+ playCustomAudio('mus_warning',false);
+}
+
 var TYPES={
  mobil:{w:34,h:60,v:[130,190],c:['#d62828','#2a9d8f','#e9c46a','#8d99ae','#f1f1f1']},
  motor:{w:18,h:40,v:[190,240],c:['#222','#c1121f','#0077b6']},
@@ -171,7 +177,40 @@ var TYPES={
  becak:{w:26,h:52,v:[40,60],c:['#ffbe0b','#fb5607']}
 };
 
+/* ---------- KONFIGURASI & TATA LETAK ---------- */
+var DEF_LAY={
+ sp:{x:180,y:622},
+ gas:{x:323,y:587},
+ rem:{x:263,y:595},
+ horn:{x:294,y:519}
+};
+var cfg={
+ mode:'dyn',
+ ctrl:'btn', // 'btn' = tombol gas/rem terpisah, 'joy' = full joystick (atas=gas, bawah=rem)
+ sfx:1,
+ mus:1,
+ lay:JSON.parse(JSON.stringify(DEF_LAY))
+};
+try{
+ var sc=JSON.parse(localStorage.getItem('pr_cfg')||'null');
+ if(sc){
+  for(var kk in sc){
+   if(kk==='lay'&&sc.lay){
+    for(var lk in DEF_LAY){if(sc.lay[lk])cfg.lay[lk]={x:sc.lay[lk].x,y:sc.lay[lk].y}}
+   }else{
+    cfg[kk]=sc[kk];
+   }
+  }
+ }
+}catch(e){}
+function saveCfg(){try{localStorage.setItem('pr_cfg',JSON.stringify(cfg))}catch(e){}PRAudio.setCfg(cfg)}
+function resetLayout(){cfg.lay=JSON.parse(JSON.stringify(DEF_LAY));saveCfg();applyControlLayout()}
+
+var pauseState=false;
+var layoutEdit=false;
+
 function reset(){
+ pauseState=false;layoutEdit=false;
  G={on:true,t:0,clock:12,dist:0,bonus:0,speed:200,fuel:100,inv:0,
   px:lx(1),tx:lx(1),slip:0,shake:0,flash:0,
   obs:[],haz:[],cn:[],dec:[],pop:[],rain:[],
@@ -213,7 +252,7 @@ function drawAmb(a){
  X.restore();
 }
 function speedo(){
- var g=G,cx=W/2,cy=H-18,r=40,kmh=Math.round(g.speed*.45),f=cl(kmh/260,0,1),imSp=ICONS.speedo;
+ var g=G,cx=cfg.lay.sp.x,cy=cfg.lay.sp.y,r=40,kmh=Math.round(g.speed*.45),f=cl(kmh/260,0,1),imSp=ICONS.speedo;
  X.save();X.lineCap='round';
  if(imSp&&imSp.complete&&imSp.naturalWidth){
   X.drawImage(imSp,cx-r-8,cy-r-8,(r+8)*2,r+14);
@@ -224,30 +263,24 @@ function speedo(){
   X.fillStyle='#fff';X.textAlign='center';X.font='bold 13px Verdana';X.fillText(kmh,cx,cy-10);
   X.restore();return;
  }
- // Bezel & latar belakang gelap semi-transparan
  var bg=X.createRadialGradient(cx,cy,6,cx,cy,r+9);
  bg.addColorStop(0,'rgba(18,24,38,.92)');bg.addColorStop(1,'rgba(8,12,20,.82)');
  X.fillStyle=bg;X.beginPath();X.arc(cx,cy,r+8,Math.PI,2*Math.PI);X.closePath();X.fill();
  X.lineWidth=2;X.strokeStyle='rgba(255,255,255,.22)';X.stroke();
- // Track busur luar
  X.lineWidth=6;X.strokeStyle='rgba(255,255,255,.12)';X.beginPath();X.arc(cx,cy,r-1,Math.PI,2*Math.PI);X.stroke();
- // Busur progres berwarna dinamis + efek glow
  var col=f<.5?'#2ec4b6':f<.8?'#ffbe0b':'#ff3b5c';
  X.save();X.shadowColor=col;X.shadowBlur=8;X.strokeStyle=col;
  X.beginPath();X.arc(cx,cy,r-1,Math.PI,Math.PI+Math.PI*f);X.stroke();X.restore();
- // Garis skala (ticks)
  for(var i=0;i<=10;i++){
   var a=Math.PI+Math.PI*i/10,c=Math.cos(a),s=Math.sin(a),maj=i%2==0;
   X.lineWidth=maj?1.6:1;X.strokeStyle=maj?'rgba(255,255,255,.8)':'rgba(255,255,255,.35)';
   X.beginPath();X.moveTo(cx+c*(r-(maj?12:9)),cy+s*(r-(maj?12:9)));X.lineTo(cx+c*(r-5),cy+s*(r-5));X.stroke();
  }
- // Jarum speedometer + titik poros
  var na=Math.PI+Math.PI*f;
  X.lineWidth=2.5;X.strokeStyle='#ff4d6d';
  X.beginPath();X.moveTo(cx,cy);X.lineTo(cx+Math.cos(na)*(r-11),cy+Math.sin(na)*(r-11));X.stroke();
  X.fillStyle='#ff4d6d';X.beginPath();X.arc(cx,cy,4.5,0,Math.PI*2);X.fill();
  X.fillStyle='#fff';X.beginPath();X.arc(cx,cy,2,0,Math.PI*2);X.fill();
- // Angka digital kecepatan
  X.fillStyle='rgba(0,0,0,.55)';rr(cx-21,cy-25,42,17,5,'rgba(0,0,0,.55)');
  X.fillStyle='#fff';X.textAlign='center';X.font='bold 14px Verdana';X.fillText(kmh,cx,cy-12);
  X.font='bold 8px Verdana';X.fillStyle='#94a3b8';X.fillText('KM/J',cx,cy-1);
@@ -281,27 +314,21 @@ function drawSvTop(){
  var cx=S.side<0?29:W-29,pom=S.k=='pom',mini=S.k=='pertamini';
  var nm=pom?'PERTAMINA':(mini?'PERTAMINI':'BENGKEL');
  var acc=pom?'#d62828':(mini?'#f59e0b':'#2b6cb0');
- // Papan reklame beberapa meter sebelum pintu masuk (e = S.y + SVL adalah awal jalur masuk)
  var ry=S.y+SVL+140;
  if(ry>-60&&ry<H+60){
   var bx=(S.side<0?28:W-28)+sx(ry);
   X.save();X.translate(bx,ry);
-  // Tiang penyangga reklame
   X.fillStyle='#334155';X.fillRect(-3,16,6,18);
-  // Papan reklame utama
   rr(-27,-24,54,42,5,'#0f172a');
   X.lineWidth=2;X.strokeStyle=acc;
   if(X.roundRect){X.beginPath();X.roundRect(-27,-24,54,42,5);X.stroke()}else{X.strokeRect(-27,-24,54,42)}
-  // Strip header warna bangunan
   rr(-25,-22,50,12,3,acc);
   X.fillStyle='#fff';X.font='bold 7.5px Verdana';X.textAlign='center';
   X.fillText(nm,0,-13);
-  // Tulisan WELCOME / DISINI + Panah ke pintu masuk (atas-samping)
   X.fillStyle='#fde047';X.font='bold 7px Verdana';
   X.fillText('WELCOME',0,-1);
   X.fillStyle='#fff';X.font='bold 6.5px Verdana';
   X.fillText('DISINI '+(S.side<0?'↖':'↗'),0,8);
-  // Panah besar berkedip mengarah ke pintu masuk lajur samping
   var blink=Math.floor(g.t*5)%2;
   X.fillStyle=blink?'#4ade80':'#fde047';X.font='bold 10px Verdana';
   X.fillText(S.side<0?'⬆ MASUK':'MASUK ⬆',0,16);
@@ -328,23 +355,21 @@ function svHud(){
  }
  if(g.auto){X.fillStyle='rgba(255,255,255,.85)';X.font='bold 11px Verdana';X.textAlign='center';X.fillText('AUTO DRIVE',W/2,H-94)}
 }
-function openService(){showCtl(false);playCustomAudio('sfx_gas',false);playCustomAudio('sfx_rem',false);renderService()}
+function openService(){showCtl(false);stopAllCustomAudio();renderService()}
 function clearExitLane(){
  var g=G;if(!g||!g.sv)return;
- var exitLane=g.sv.side<0?0:N-1,safeLane=g.sv.side<0?N-1:0;
+ var exitLane=g.sv.side<0?0:N-1;
  g.obs=g.obs.filter(function(o){
   if(o.fl)return true;
-  // Jika NPC berada di lajur keluar atau terlalu dekat dengan posisi pemain saat keluar
   if(o.lane==exitLane||Math.abs(o.x-lx(exitLane))<LW*1.15){
    if(o.y>-120&&o.y<PY+140){
-    // Coba pindahkan ke lajur sisi seberang yang kosong
     var moved=false;
     var cands=g.sv.side<0?[2,3,1]:[1,0,2];
     for(var i=0;i<cands.length;i++){
      var nl=cands[i];
      if(nl!=exitLane&&laneFree(o,nl)){o.lane=nl;o.x=lx(nl);moved=true;break;}
     }
-    if(!moved)return false; // Hapus NPC penghalang agar jalur keluar 100% bersih
+    if(!moved)return false;
    }
   }
   return true;
@@ -414,11 +439,8 @@ function crashFx(x,y,dd,col,pw){
  if(g.dents.length<6)g.dents.push({x:rnd(-14,6),y:rnd(-26,16),w:rnd(6,12),h:rnd(5,10)});
  PRAudio.play('crash');
 }
-var cfg={mode:'dyn',sfx:1,mus:1};
-try{var sc=JSON.parse(localStorage.getItem('pr_cfg')||'null');if(sc)for(var kk in sc)cfg[kk]=sc[kk]}catch(e){}
-function saveCfg(){try{localStorage.setItem('pr_cfg',JSON.stringify(cfg))}catch(e){}PRAudio.setCfg(cfg)}
-function tg(id,t){return '<button id="'+id+'" style="background:#2a3441;color:#f4efe0;font-size:12px;padding:8px 12px;margin:0">'+t+'</button>'}
-function cfgHTML(){return '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center">'+tg('sm','Joystick: '+(cfg.mode=='dyn'?'Dinamis':'Tetap'))+tg('ss','Suara: '+(cfg.sfx?'Hidup':'Mati'))+tg('sn','Musik: '+(cfg.mus?'Hidup':'Mati'))+'</div>'}
+
+function tg(id,t,bgCol){return '<button id="'+id+'" style="background:'+(bgCol||'#2a3441')+';color:#f4efe0;font-size:12px;padding:9px 12px;margin:0;width:100%">'+t+'</button>'}
 function emit(x,y,n,c,sp,l,s,add){for(var i=0;i<n;i++)G.pt.push({x:x,y:y,vx:rnd(-sp,sp),vy:rnd(-sp,sp)*.8,l:l*rnd(.6,1),m:l,c:c,s:s,a:add})}
 function spawnObs(){
  var r=Math.random(),t=r<.3?'mobil':r<.52?'motor':r<.67?'angkot':r<.77?'bus':r<.9?'truk':'becak';
@@ -434,8 +456,9 @@ function spawnObs(){
  var o=G.obs[G.obs.length-1];o.v0=o.v;
 }
 
+var joyAudioState=0; // 0=netral, 1=gas, -1=rem
 function update(dt){
- var g=G;if(g.pause)return;if(g.hs>0){g.hs-=dt;return}g.t+=dt;g.clock+=dt/14;g.off+=g.speed*dt;
+ var g=G;if(g.pause||pauseState||layoutEdit)return;if(g.hs>0){g.hs-=dt;return}g.t+=dt;g.clock+=dt/14;g.off+=g.speed*dt;
  var ez=g.tb<0?.35:.35+.65*cl((g.t-g.tb)/240,0,1);
  // cuaca
  g.wTimer-=dt;
@@ -475,16 +498,32 @@ function update(dt){
   var popTxt=k2=='pom'?'Pom bensin Pertamina di depan!':(k2=='pertamini'?'Pertamini di depan!':'Bengkel di depan!');
   g.pop.push({x:W/2,y:215,t:popTxt,l:2});PRAudio.play('warn')}
 }
- // kontrol
- var dir=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0);
+ // kontrol setir
+ var dir=(keys.ArrowRight||keys.d||keys.D?1:0)-(keys.ArrowLeft||keys.a||keys.A?1:0);
  var ax=dir?dir*.62:stick.x;if(ax&&!g.auto)g.tx=cl(g.tx+ax*310*dt,txMin(),txMax());
  var grip=(g.auto?4:dir?6:stick.x?8:11)*(1-.6*g.w);
  if(g.slip>0){g.slip-=dt;g.tx+=Math.sin(g.t*14)*160*dt;grip*=.4}
  g.tx=cl(g.tx,txMin(),txMax());
  g.px+=(g.tx-g.px)*Math.min(1,grip*dt);
- // kecepatan
+
+ // kecepatan (mendukung mode tombol & mode full joystick)
  var base=(250+Math.min(g.dist/14,150))*(.8+.2*ez);
- var thr=g.auto?0:((gasOn||keys.ArrowUp||keys.w)?1:0)-((brkOn||keys.ArrowDown||keys.s)?1:0);
+ var thr=0;
+ if(!g.auto){
+  var keyThr=((keys.ArrowUp||keys.w||keys.W)?1:0)-((keys.ArrowDown||keys.s||keys.S)?1:0);
+  if(cfg.ctrl==='joy'){
+   thr=keyThr!==0?keyThr:stick.y;
+   var jState=thr>.18?1:(thr<-.18?-1:0);
+   if(jState!==joyAudioState){
+    joyAudioState=jState;
+    playCustomAudio('sfx_gas',jState===1);
+    playCustomAudio('sfx_rem',jState===-1);
+   }
+  }else{
+   thr=(gasOn?1:0)-(brkOn?1:0);
+   if(keyThr!==0)thr=keyThr;
+  }
+ }
  g.thr+=(thr-g.thr)*Math.min(1,dt*3);
  var bo=g.thr>.6;g.boosting=bo;
  g.py+=((g.auto?PY0:PY0-(g.thr>0?PY0-PYMIN:PYMAX-PY0)*g.thr)-g.py)*Math.min(1,dt*2.5);PY=g.py;
@@ -528,7 +567,6 @@ function update(dt){
   if(!k.got&&Math.abs(k.x-p.x)<24&&Math.abs(k.y-p.y)<36){k.got=1;g.coins+=k.v;g.ct+=k.v;PRAudio.play(k.v>1?'coin_gold':'coin',0.25);if(k.v>1)g.pop.push({x:p.x,y:p.y-50,t:'+5 koin',l:.9})}});
  g.cn=g.cn.filter(function(k){return k.y<H+30&&!k.got});
  g.obs.forEach(function(o){
-  // perilaku
   if(o.t=='motor'&&!o.fl){o.ch-=dt;if(o.ch<=0&&o.y>-20&&o.y<300){var nl=cl(o.lane+(Math.random()<.5?-1:1),0,N-1);if(nl!=o.lane&&laneFree(o,nl)){o.lane=nl;o.sw=2.5}o.ch=rnd(1.2,2.5)/Math.max(.35,ez)}}
   if(!o.fl){
    if(o.br>0)o.br-=dt;
@@ -545,7 +583,6 @@ function update(dt){
   if(o.fl){o.x+=o.kx*dt;o.kx*=Math.pow(.55,dt);o.rot=(o.rot||0)+o.sp*dt;o.sp*=Math.pow(.6,dt);if(Math.random()<dt*14)emit(o.x,o.y,1,'90,90,90',20,.8,6,0)}
   else o.x+=(lx(o.lane)-o.x)*Math.min(1,dt*(o.sw||3));
   if(o.fx>0)o.fx-=dt;o.y+=(g.speed-o.v)*dt;
-  // tabrakan
   var dx=Math.abs(o.x-p.x),dy=Math.abs(o.y-p.y);
   var hw=(o.w+p.w)/2-3,hh=(o.h+p.h)/2-5;
   if(!o.hit&&dx<hw&&dy<hh&&(g.inv<=0&&!g.auto)){
@@ -554,9 +591,7 @@ function update(dt){
    knock(o,dd,1,1);crashFx((o.x+p.x)/2,(o.y+p.y)/2,dd,o.c,spd/400);
    g.tx-=dd*34;g.px-=dd*20;emit(o.x-dd*o.w/2,o.y,10,'255,220,120',200,.4,3,1);
    g.pop.push({x:p.x,y:p.y-50,t:'Brak!',l:1});emit(p.x,p.y,18,'255,200,80',240,.55,3,1);
-   
   }
-  // nyaris
   if(!o.n&&!o.hit&&o.y>p.y-10){
    o.n=1;
    var gap=dx-(o.w+p.w)/2;
@@ -591,7 +626,6 @@ function update(dt){
     A.hit=1;g.inv=1.4;leakHit();g.speed*=.6;g.shake=14;vib(120);
     var dd2=A.x>=g.px?1:-1;g.tx-=dd2*60;g.px-=dd2*30;crashFx(g.px,PY,dd2,'#f4f4f4',1);
     g.pop.push({x:g.px,y:PY-50,t:'Ditabrak ambulance!',l:1.4});emit(g.px,PY,14,'255,200,80',220,.5,3,1);
-    
    }
    if(!A.ok&&!A.hit&&A.y<PY-90){A.ok=1;g.bonus+=60;g.pop.push({x:g.px,y:PY-50,t:'Ambulance lewat +60',l:1.4})}
    if(A.y<-160){g.am=null;g.amT=rnd(55,85)}
@@ -628,7 +662,7 @@ function update(dt){
 function vib(n){try{navigator.vibrate&&navigator.vibrate(n)}catch(e){}}
 function score(){return Math.floor(G.dist)+G.bonus}
 function over(why){
- G.on=false;showCtl(false);playCustomAudio('sfx_gas',false);playCustomAudio('sfx_rem',false);playCustomAudio('mus_warning',false);
+ G.on=false;pauseState=false;layoutEdit=false;showCtl(false);stopAllCustomAudio();
  var s=score(),nb=s>best;
  if(nb){best=s;try{localStorage.setItem('pr_best',best)}catch(e){}}
  showMenu('Tamat',why+'.<br>Skor <b>'+s+'</b> · '+Math.floor(G.dist)+' m · '+G.ct+' koin'+(nb?'<br>Rekor baru!':'<br>Rekor: '+best),'Main lagi');
@@ -709,7 +743,7 @@ function draw(){
  X.globalCompositeOperation='source-over';
  // garis kecepatan
  var sl=cl((g.speed-300)/260,0,.55);
- if(sl>.02){X.strokeStyle='rgba(255,255,255,'+sl*.5+')';X.lineWidth=1.5;X.beginPath();for(var i=0;i<16;i++){var lx2=(i*67+13)%W,ly=((i*131+g.off*2.2)%(H+120))-60;X.moveTo(lx2,ly);X.lineTo(lx2,ly+30+g.speed/9)}X.stroke()}
+ if(sl>.02){X.strokeStyle='rgba(255,255,255,'+sl*.5+')';X.lineWidth=1;X.beginPath();for(var i=0;i<16;i++){var lx2=(i*67+13)%W,ly=((i*131+g.off*2.2)%(H+120))-60;X.moveTo(lx2,ly);X.lineTo(lx2,ly+30+g.speed/9)}X.stroke()}
  // gelap malam + lampu
  var a=d*.82+g.w*.12;
  if(a>.01){
@@ -740,7 +774,6 @@ function draw(){
    if(g.sv&&g.sv.st=='on'){var cy2=g.sv.y+SVL/2,cx2=(g.sv.side<0?29:W-29)+sx(cy2);var r4=OX.createRadialGradient(cx2,cy2,5,cx2,cy2,110);r4.addColorStop(0,'rgba(0,0,0,.95)');r4.addColorStop(1,'rgba(0,0,0,0)');OX.fillStyle=r4;OX.fillRect(cx2-110,cy2-110,220,220)}}
   OX.globalCompositeOperation='source-over';
   X.drawImage(O,0,0,W,H);
-  // lampu belakang (ikut rotasi kendaraan)
   if(d>.05){X.globalCompositeOperation='lighter';
    g.obs.forEach(function(v){if(v.fl)return;var vx=v.x+sx(v.y),ang=slope(v.y)+(lx(v.lane)-v.x)*.012+(v.rot||0),by=v.h/2;
     var c=v.br>0?'rgba(255,40,40,.95)':'rgba(255,40,40,.6)';
@@ -748,7 +781,6 @@ function draw(){
     X.fillStyle='rgba(255,60,60,'+.25*g.w+')';X.fillRect(-v.w/2+3,by,5,28*g.w);X.fillRect(v.w/2-8,by,5,28*g.w);
     X.fillStyle=c;if(v.t=='motor'){X.fillRect(-2,by-3,4,3)}else{X.fillRect(-v.w/2+2,by-4,7,4);X.fillRect(v.w/2-9,by-4,7,4)}
     X.restore()});
-   // lampu depan (ikut rotasi kendaraan)
    g.obs.forEach(function(v){if(v.fl||v.t=='becak'||d<=.12)return;var vx=v.x+sx(v.y),ang=slope(v.y)+(lx(v.lane)-v.x)*.012+(v.rot||0),fy=-v.h/2+2;
     X.save();X.translate(vx,v.y);X.rotate(ang);
     X.fillStyle='rgba(255,244,190,'+Math.min(1,d*1.2)+')';
@@ -804,7 +836,6 @@ function hud(){
  X.textAlign='right';X.fillStyle='#fff';X.font='bold 20px Verdana';X.fillText(score(),W-10,24);
  speedo();
  bar(100,22,74,g.fuel/g.cap*100,g.fuel/g.cap<.25?'#ff4d4d':'#2dc653','BBM '+Math.ceil(g.fuel)+'/'+g.cap+' L');
- 
  X.fillStyle='#ffd23f';X.beginPath();X.arc(194,17,6,0,7);X.fill();X.fillStyle='#fff';X.textAlign='left';X.font='bold 14px Verdana';X.fillText(g.coins,204,22);
  if(g.leak>.05){X.fillStyle=Math.floor(g.t*4)%2?'#ff4d4d':'#ffb3b3';X.font='bold 10px Verdana';X.fillText('BOCOR -'+g.leak.toFixed(1)+'/dtk',186,43)}
  g.pop.forEach(function(q){X.globalAlpha=cl(q.l,0,1);X.fillStyle='#ffd166';X.font='bold 14px Verdana';X.textAlign='center';X.fillText(q.t,q.x,q.y);X.globalAlpha=1});
@@ -814,13 +845,13 @@ function hud(){
 var last=0;
 function loop(ts){
  var dt=Math.min(.05,(ts-last)/1000||0);last=ts;
- if(G&&G.on){update(dt);if(G)draw()}
+ if(G&&G.on&&!pauseState&&!layoutEdit){update(dt);if(G)draw()}
  requestAnimationFrame(loop);
 }
 var AC=null;
 function beep(){PRAudio.play(G&&G.hl>0?'horn_strong':'horn')}
 function honk(){
- if(!G||!G.on||G.pause||G.hk>0)return;G.hk=.6;beep();vib(20);
+ if(!G||!G.on||G.pause||pauseState||layoutEdit||G.hk>0)return;G.hk=.6;beep();vib(20);
  G.pop.push({x:G.px,y:PY-60,t:'Tiiin!',l:.9});G.hw={t:.5,r:HR[G.hl]};
  G.obs.forEach(function(o){
   if(o.fl||o.y>=PY||PY-o.y>HR[G.hl]||Math.abs(o.x-G.px)>LW*.8)return;
@@ -846,11 +877,13 @@ window.addEventListener('appinstalled',function(){
  deferredPrompt=null;
  var ib=document.getElementById('inst');if(ib)ib.style.display='none';
 });
+
+/* ---------- MENU UTAMA, PAUSE, PENGATURAN & ATUR TATA LETAK ---------- */
 function showMenu(h,body,btn){
  lastMenu=[h,body,btn];
  var isStandalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone;
- var instBtn=isStandalone?'':'<button id="inst" style="background:#2dc653;color:#081c15;font-size:13px;padding:10px 16px;margin-top:8px;display:'+(deferredPrompt?'inline-block':'inline-block')+'">⬇ Install Aplikasi</button>';
- M.innerHTML='<h1>'+h+'</h1><p>'+body+'</p><button id="go">'+btn+'</button>'+instBtn+cfgHTML();
+ var instBtn=isStandalone?'':'<button id="inst" style="background:#2dc653;color:#081c15;font-size:13px;padding:10px 16px;margin-top:8px;display:inline-block">⬇ Install Aplikasi</button>';
+ M.innerHTML='<h1>'+h+'</h1><p>'+body+'</p><button id="go">'+btn+'</button>'+instBtn+'<button id="m_cfg" style="background:#2a3441;color:#f4efe0;font-size:13px;padding:10px 18px;margin-top:8px">⚙ Pengaturan & Tata Letak</button>';
  M.style.display='flex';PRAudio.music('menu');
  var $=function(i){return document.getElementById(i)};
  $('go').onclick=start;
@@ -862,35 +895,194 @@ function showMenu(h,body,btn){
    alert('Untuk menginstall aplikasi:\n\n• Android / Chrome: Ketuk menu titik tiga (⋮) di pojok kanan atas browser lalu pilih "Install aplikasi" atau "Tambahkan ke Layar utama".\n• iPhone / Safari: Ketuk tombol Bagikan (Share) lalu pilih "Add to Home Screen".');
   }
  };
- $('sm').onclick=function(){cfg.mode=cfg.mode=='dyn'?'fix':'dyn';saveCfg();showMenu.apply(null,lastMenu)};
- $('ss').onclick=function(){cfg.sfx=cfg.sfx?0:1;saveCfg();showMenu.apply(null,lastMenu)};
- $('sn').onclick=function(){cfg.mus=cfg.mus?0:1;if(!cfg.mus)playCustomAudio('mus_warning',false);saveCfg();showMenu.apply(null,lastMenu)};
+ $('m_cfg').onclick=function(){openSettings('menu')};
 }
+
+function openPause(){
+ if(!G||!G.on||G.pause||pauseState||layoutEdit)return;
+ pauseState=true;
+ gasOn=false;brkOn=false;joyAudioState=0;
+ stopAllCustomAudio();
+ showCtl(false);
+ M.innerHTML='<h1 style="font-size:28px">JEDA</h1>'+
+  '<p>Skor: <b>'+score()+'</b> · Koin: <b>'+G.coins+'</b> · BBM: <b>'+Math.ceil(G.fuel)+'/'+G.cap+' L</b></p>'+
+  '<div style="display:flex;flex-direction:column;gap:10px;width:230px;margin-top:8px">'+
+  '<button id="p_res" style="background:#2dc653;color:#081c15;width:100%">▶ Lanjut Main</button>'+
+  '<button id="p_set" style="background:#3a86ff;color:#fff;width:100%">⚙ Pengaturan</button>'+
+  '<button id="p_hom" style="background:#d62828;color:#fff;width:100%">🏠 Kembali ke Menu</button>'+
+  '</div>';
+ M.style.display='flex';
+ document.getElementById('p_res').onclick=resumeGame;
+ document.getElementById('p_set').onclick=function(){openSettings('pause')};
+ document.getElementById('p_hom').onclick=function(){
+  pauseState=false;G.on=false;stopAllCustomAudio();showCtl(false);
+  showMenu('PANTURA RUSH','Salip bus, truk, angkot, motor, dan becak di jalur Pantura. Siang berganti malam, cerah berganti hujan.<br><br>Setir pakai joystick (PC: panah kiri/kanan). GAS membawa mobil maju ke depan layar, REM memundurkannya (PC: panah atas/bawah). Tekan KLAKSON (atau H) agar kendaraan di depan minggir. Lewati kendaraan dengan jarak tipis untuk dapat bonus skor dan koin. Kumpulkan koin untuk isi BBM di Pom Bensin dan upgrade di Bengkel (masuk lewat lajur samping saat ada peringatan). Kamu hanya kalah kalau bensin habis, dan tabrakan membuat tangki bocor.<br><span class="s">Rekor: '+best+'</span>','Mulai');
+ };
+}
+
+function resumeGame(){
+ if(!G||!G.on)return;
+ pauseState=false;layoutEdit=false;
+ M.style.display='none';
+ showCtl(true);
+ last=performance.now();
+}
+
+function openSettings(from){
+ M.innerHTML='<h1 style="font-size:24px">PENGATURAN</h1>'+
+  '<div style="display:flex;flex-direction:column;gap:8px;width:255px;margin-top:8px">'+
+  tg('st_ctrl','Kontrol Gas & Rem: '+(cfg.ctrl==='joy'?'Full Joystick':'Tombol Layar'),cfg.ctrl==='joy'?'#2b6cb0':'#2a3441')+
+  tg('st_joy','Posisi Joystick: '+(cfg.mode=='dyn'?'Dinamis (Sentuh Bebas)':'Tetap (Kiri Bawah)'))+
+  tg('st_sfx','Efek Suara (SFX): '+(cfg.sfx?'Hidup':'Mati'))+
+  tg('st_mus','Musik & Peringatan: '+(cfg.mus?'Hidup':'Mati'))+
+  tg('st_lay','📐 Atur Tata Letak Tombol & Speedo','#d97706')+
+  '</div>'+
+  '<button id="st_back" style="background:#3a86ff;color:#fff;margin-top:16px;width:255px">✔ Selesai & Kembali</button>';
+ M.style.display='flex';
+ var $=function(i){return document.getElementById(i)};
+ $('st_ctrl').onclick=function(){
+  cfg.ctrl=(cfg.ctrl==='btn'?'joy':'btn');
+  saveCfg();applyControlLayout();openSettings(from);
+ };
+ $('st_joy').onclick=function(){
+  cfg.mode=(cfg.mode=='dyn'?'fix':'dyn');
+  saveCfg();openSettings(from);
+ };
+ $('st_sfx').onclick=function(){
+  cfg.sfx=cfg.sfx?0:1;saveCfg();openSettings(from);
+ };
+ $('st_mus').onclick=function(){
+  cfg.mus=cfg.mus?0:1;if(!cfg.mus)playCustomAudio('mus_warning',false);
+  saveCfg();openSettings(from);
+ };
+ $('st_lay').onclick=function(){openLayoutEditor(from)};
+ $('st_back').onclick=function(){
+  if(from==='pause')openPause();
+  else showMenu.apply(null,lastMenu);
+ };
+}
+
+/* ---------- EDITOR TATA LETAK DRAG & DROP ---------- */
+var layoutOverlay=null;
+function openLayoutEditor(from){
+ layoutEdit=true;
+ M.style.display='none';
+ showCtl(false);
+ if(G)draw();
+
+ if(layoutOverlay)layoutOverlay.remove();
+ layoutOverlay=document.createElement('div');
+ layoutOverlay.style.cssText='position:absolute;inset:0;z-index:40;background:rgba(5,10,20,.65);touch-action:none;user-select:none;';
+
+ var banner=document.createElement('div');
+ banner.style.cssText='position:absolute;top:58px;left:10px;right:10px;background:rgba(15,23,42,.92);border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:8px 10px;text-align:center;color:#fff;font-family:Verdana,sans-serif;font-size:11px;z-index:45;';
+ banner.innerHTML='<b>GESER POSISI KOMPONEN</b><br><span style="color:#ffd166">Seret tombol atau speedometer ke posisi yang diinginkan</span>'+
+  '<div style="display:flex;gap:8px;justify-content:center;margin-top:8px">'+
+  '<button id="ly_rst" style="background:#64748b;color:#fff;font-size:11px;padding:6px 10px;margin:0">Reset Default</button>'+
+  '<button id="ly_ok" style="background:#2dc653;color:#081c15;font-size:11px;padding:6px 14px;margin:0;font-weight:bold">Simpan</button>'+
+  '</div>';
+ layoutOverlay.appendChild(banner);
+
+ function createProxy(key,label,w,h,bgCol,isCircle){
+  var el=document.createElement('div');
+  var pxLeft=(cfg.lay[key].x/W*100),pxTop=(cfg.lay[key].y/H*100);
+  el.style.cssText='position:absolute;left:'+pxLeft+'%;top:'+pxTop+'%;transform:translate(-50%,-50%);width:'+w+'px;height:'+h+'px;background:'+bgCol+';border:2px dashed #fde047;border-radius:'+(isCircle?'50%':'12px')+';display:flex;align-items:center;justify-content:center;color:#fff;font:bold 10px Verdana;text-align:center;cursor:grab;box-shadow:0 4px 12px rgba(0,0,0,.6);z-index:42;';
+  el.textContent=label;
+  if(cfg.ctrl==='joy'&&(key==='gas'||key==='rem')){
+   el.style.opacity='0.45';
+   el.innerHTML=label+'<br><span style="font-size:8px;color:#fde047">(Tersembunyi)</span>';
+  }
+  var dragging=false;
+  el.addEventListener('pointerdown',function(e){
+   e.preventDefault();e.stopPropagation();
+   dragging=true;try{el.setPointerCapture(e.pointerId)}catch(err){}
+  });
+  el.addEventListener('pointermove',function(e){
+   if(!dragging)return;
+   var r=WR.getBoundingClientRect();
+   var gx=cl((e.clientX-r.left)/r.width*W,26,W-26);
+   var gy=cl((e.clientY-r.top)/r.height*H,64,H-20);
+   cfg.lay[key].x=Math.round(gx);
+   cfg.lay[key].y=Math.round(gy);
+   el.style.left=(gx/W*100)+'%';
+   el.style.top=(gy/H*100)+'%';
+   if(key==='sp'&&G)draw();
+  });
+  ['pointerup','pointercancel'].forEach(function(ev){
+   el.addEventListener(ev,function(){dragging=false});
+  });
+  layoutOverlay.appendChild(el);
+ }
+
+ createProxy('sp','SPEEDO',92,50,'rgba(15,23,42,.88)',false);
+ createProxy('gas','GAS',54,78,'rgba(27,67,50,.9)',false);
+ createProxy('rem','REM',52,62,'rgba(89,13,34,.9)',false);
+ createProxy('horn','KLAKSON',50,50,'rgba(30,58,138,.9)',true);
+
+ WR.appendChild(layoutOverlay);
+
+ document.getElementById('ly_rst').onclick=function(){
+  resetLayout();
+  openLayoutEditor(from);
+ };
+ document.getElementById('ly_ok').onclick=function(){
+  saveCfg();applyControlLayout();
+  if(layoutOverlay){layoutOverlay.remove();layoutOverlay=null;}
+  layoutEdit=false;
+  openSettings(from);
+ };
+}
+
 function start(){PRAudio.init();reset();M.style.display='none';showCtl(true);draw()}
-function setTx(e){if(G&&G.auto)return;var r=C.getBoundingClientRect();if(G)G.tx=cl((e.clientX-r.left)/r.width*W,txMin(),txMax())}
 var PAD=document.getElementById('pad'),SZ=document.getElementById('zone'),SB=document.getElementById('stick'),KN=document.getElementById('knob'),WR=document.getElementById('w');
-var stick={on:false,id:null,ox:0,oy:0,x:0},SR=48;
-function stickMove(e){var r=WR.getBoundingClientRect(),dx=e.clientX-r.left-stick.ox,dy=e.clientY-r.top-stick.oy,l=Math.hypot(dx,dy)||1,k=Math.min(1,SR/l);
- KN.style.transform='translate('+dx*k+'px,'+dy*k+'px)';var v=cl(dx/SR,-1,1);stick.x=Math.abs(v)<.1?0:(v>0?1:-1)*(Math.abs(v)-.1)/.9}
-function stickEnd(){stick.on=false;stick.id=null;stick.x=0;KN.style.transform='';if(cfg.mode=='dyn')SB.style.display='none'}
+
+/* ---------- TOMBOL PAUSE DI KANVAS GAME ---------- */
+var pauseBtnEl=document.createElement('button');
+pauseBtnEl.id='btn_pause';
+pauseBtnEl.innerHTML='⏸';
+pauseBtnEl.title='Jeda Game (Pause)';
+pauseBtnEl.style.cssText='position:absolute;top:58px;right:10px;z-index:26;width:36px;height:36px;padding:0;margin:0;border-radius:10px;background:rgba(15,23,42,.72);color:#fff;border:1.5px solid rgba(255,255,255,.3);font-size:15px;display:none;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(2px);';
+pauseBtnEl.addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();openPause()});
+WR.appendChild(pauseBtnEl);
+
+var stick={on:false,id:null,ox:0,oy:0,x:0,y:0},SR=48;
+function stickMove(e){
+ var r=WR.getBoundingClientRect(),dx=e.clientX-r.left-stick.ox,dy=e.clientY-r.top-stick.oy,l=Math.hypot(dx,dy)||1,k=Math.min(1,SR/l);
+ KN.style.transform='translate('+dx*k+'px,'+dy*k+'px)';
+ var vx=cl(dx/SR,-1,1);
+ stick.x=Math.abs(vx)<.1?0:(vx>0?1:-1)*(Math.abs(vx)-.1)/.9;
+ var vy=cl(-dy/SR,-1,1); // ke atas = positif (gas), ke bawah = negatif (rem)
+ stick.y=Math.abs(vy)<.15?0:(vy>0?1:-1)*(Math.abs(vy)-.15)/.85;
+}
+function stickEnd(){
+ stick.on=false;stick.id=null;stick.x=0;stick.y=0;
+ if(joyAudioState!==0){joyAudioState=0;playCustomAudio('sfx_gas',false);playCustomAudio('sfx_rem',false);}
+ KN.style.transform='';if(cfg.mode=='dyn')SB.style.display='none';
+}
 function isExcludedZone(e){
  var r=WR.getBoundingClientRect();
  var lxPos=e.clientX-r.left,lyPos=e.clientY-r.top;
- // Konversi ke koordinat logika game (W=360, H=640)
  var gx=lxPos/r.width*W,gy=lyPos/r.height*H;
- // Kecualikan area speedometer di bawah tengah (cx=W/2, cy=H-18, radius ~52)
- if(Math.hypot(gx-W/2,gy-(H-18))<=56)return true;
- // Kecualikan area HUD atas (y < 54)
+ // Kecualikan area speedometer dinamis
+ if(Math.hypot(gx-cfg.lay.sp.x,gy-cfg.lay.sp.y)<=56)return true;
+ // Kecualikan area HUD atas
  if(gy<54)return true;
- // Kecualikan area tombol gas, rem, dan klakson (#pad)
- if(PAD&&PAD.style.display!='none'){
-  var pr=PAD.getBoundingClientRect();
-  if(e.clientX>=pr.left-8&&e.clientX<=pr.right+8&&e.clientY>=pr.top-8&&e.clientY<=pr.bottom+8)return true;
+ // Kecualikan tombol pause kanan atas
+ if(gx>W-54&&gy<102)return true;
+ // Kecualikan area tombol gas, rem, dan klakson yang aktif
+ var ids=['bh'];
+ if(cfg.ctrl!=='joy'){ids.push('bg','br');}
+ for(var i=0;i<ids.length;i++){
+  var b=document.getElementById(ids[i]);
+  if(b&&b.style.display!=='none'){
+   var br=b.getBoundingClientRect();
+   if(e.clientX>=br.left-8&&e.clientX<=br.right+8&&e.clientY>=br.top-8&&e.clientY<=br.bottom+8)return true;
+  }
  }
  return false;
 }
 SZ.addEventListener('pointerdown',function(e){
- if(stick.on)return;
+ if(stick.on||pauseState||layoutEdit)return;
  if(cfg.mode=='dyn'&&isExcludedZone(e))return;
  e.preventDefault();
  stick.on=true;stick.id=e.pointerId;try{SZ.setPointerCapture(e.pointerId)}catch(x){}
@@ -900,34 +1092,50 @@ SZ.addEventListener('pointerdown',function(e){
  stickMove(e)});
 SZ.addEventListener('pointermove',function(e){if(stick.on&&e.pointerId===stick.id)stickMove(e)});
 ['pointerup','pointercancel'].forEach(function(n){SZ.addEventListener(n,function(e){if(e.pointerId===stick.id)stickEnd()})});
-function showCtl(v){PAD.style.display=v?'flex':'none';SZ.style.display=v?'block':'none';
+
+function applyControlLayout(){
+ var bg=document.getElementById('bg'),br=document.getElementById('br'),bh=document.getElementById('bh');
+ if(!PAD||!bg||!br||!bh)return;
+ PAD.style.inset='0';
+ PAD.style.width='100%';
+ PAD.style.height='100%';
+ PAD.style.pointerEvents='none';
+
+ function placeEl(el,key,visible){
+  el.style.position='absolute';
+  el.style.left=(cfg.lay[key].x/W*100)+'%';
+  el.style.top=(cfg.lay[key].y/H*100)+'%';
+  el.style.transform='translate(-50%,-50%)';
+  el.style.pointerEvents=visible?'auto':'none';
+  el.style.display=visible?'flex':'none';
+ }
+ var showPedals=(cfg.ctrl!=='joy');
+ placeEl(bg,'gas',showPedals);
+ placeEl(br,'rem',showPedals);
+ placeEl(bh,'horn',true);
+}
+
+function showCtl(v){
+ PAD.style.display=v?'block':'none';
+ SZ.style.display=v?'block':'none';
+ pauseBtnEl.style.display=(v&&G&&G.on&&!G.pause)?'flex':'none';
+ if(v)applyControlLayout();
  if(SZ){
   if(cfg.mode=='dyn'){SZ.style.left='0';SZ.style.top='0';SZ.style.right='0';SZ.style.bottom='0';SZ.style.width='100%';SZ.style.height='100%';}
   else{SZ.style.left='0';SZ.style.top='0';SZ.style.right='';SZ.style.bottom='0';SZ.style.width='50%';SZ.style.height='100%';}
  }
  stickEnd();gasOn=false;brkOn=false;
- SB.className=cfg.mode=='fix'?'fix':'';SB.style.left='';SB.style.top='';SB.style.display=(v&&cfg.mode=='fix')?'block':'none'}
-function hold(id,on,off){var b=document.getElementById(id);b.addEventListener('pointerdown',function(e){e.preventDefault();try{b.setPointerCapture(e.pointerId)}catch(x){}on()});['pointerup','pointercancel'].forEach(function(n){b.addEventListener(n,off)})}
+ SB.className=cfg.mode=='fix'?'fix':'';SB.style.left='';SB.style.top='';SB.style.display=(v&&cfg.mode=='fix')?'block':'none';
+}
+
+function hold(id,on,off){var b=document.getElementById(id);b.addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();try{b.setPointerCapture(e.pointerId)}catch(x){}on()});['pointerup','pointercancel'].forEach(function(n){b.addEventListener(n,off)})}
 (function(){
  var bg=document.getElementById('bg'),br=document.getElementById('br'),bh=document.getElementById('bh'),pd=document.getElementById('pad');
  if(pd&&bg&&br&&bh){
-  // Susun ulang DOM agar Klakson di atas, dan di bawahnya baris berdampingan: REM (kiri) & GAS (kanan)
-  pd.style.display='flex';
-  pd.style.flexDirection='column';
-  pd.style.alignItems='center';
-  pd.style.gap='8px';
-  pd.style.right='10px';
-  pd.style.bottom='14px';
-  var row=document.createElement('div');
-  row.style.display='flex';
-  row.style.flexDirection='row';
-  row.style.alignItems='flex-end';
-  row.style.gap='8px';
   pd.innerHTML='';
   pd.appendChild(bh);
-  row.appendChild(br); // REM di kiri
-  row.appendChild(bg); // GAS di kanan
-  pd.appendChild(row);
+  pd.appendChild(br);
+  pd.appendChild(bg);
  }
  function setBtnIcon(el,path,svgFallback,w,h,label){
   el.innerHTML='';
@@ -947,27 +1155,33 @@ function hold(id,on,off){var b=document.getElementById(id);b.addEventListener('p
  }
  if(bg){
   bg.style.width='54px';bg.style.height='78px';bg.style.padding='4px';bg.style.borderRadius='12px';
-  bg.style.display='flex';bg.style.flexDirection='column';bg.style.alignItems='center';bg.style.justifyContent='center';bg.style.gap='3px';
+  bg.style.flexDirection='column';bg.style.alignItems='center';bg.style.justifyContent='center';bg.style.gap='3px';
   setBtnIcon(bg,ICON_PATHS.gas,'<svg width="28" height="42" viewBox="0 0 36 56" fill="none"><rect x="4" y="2" width="28" height="52" rx="7" fill="#1b4332" stroke="#95d5b2" stroke-width="2.5"/><rect x="9" y="8" width="18" height="40" rx="4" fill="#2dc653"/><line x1="12" y1="15" x2="24" y2="15" stroke="#081c15" stroke-width="2.5" stroke-linecap="round"/><line x1="12" y1="23" x2="24" y2="23" stroke="#081c15" stroke-width="2.5" stroke-linecap="round"/><line x1="12" y1="31" x2="24" y2="31" stroke="#081c15" stroke-width="2.5" stroke-linecap="round"/><line x1="12" y1="39" x2="24" y2="39" stroke="#081c15" stroke-width="2.5" stroke-linecap="round"/></svg>',30,44,'GAS');
  }
  if(br){
   br.style.width='52px';br.style.height='62px';br.style.padding='4px';br.style.borderRadius='12px';
-  br.style.display='flex';br.style.flexDirection='column';br.style.alignItems='center';br.style.justifyContent='center';br.style.gap='3px';
+  br.style.flexDirection='column';br.style.alignItems='center';br.style.justifyContent='center';br.style.gap='3px';
   setBtnIcon(br,ICON_PATHS.rem,'<svg width="32" height="30" viewBox="0 0 44 40" fill="none"><rect x="3" y="4" width="38" height="32" rx="7" fill="#590d22" stroke="#ffb3c1" stroke-width="2.5"/><rect x="8" y="9" width="28" height="22" rx="4" fill="#ff4d6d"/><line x1="14" y1="13" x2="14" y2="27" stroke="#590d22" stroke-width="2.5" stroke-linecap="round"/><line x1="22" y1="13" x2="22" y2="27" stroke="#590d22" stroke-width="2.5" stroke-linecap="round"/><line x1="30" y1="13" x2="30" y2="27" stroke="#590d22" stroke-width="2.5" stroke-linecap="round"/></svg>',32,30,'REM');
  }
  if(bh){
   bh.style.width='46px';bh.style.height='46px';bh.style.padding='4px';bh.style.borderRadius='50%';
-  bh.style.display='flex';bh.style.alignItems='center';bh.style.justifyContent='center';
+  bh.style.alignItems='center';bh.style.justifyContent='center';
   setBtnIcon(bh,ICON_PATHS.klakson,'<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 10v4h3l5 4V6L7 10H4zm12.5 2c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 4.45v2.06c2.89.86 5 3.54 5 6.49s-2.11 5.63-5 6.49v2.06c4.01-.91 7-4.49 7-8.55s-2.99-7.64-7-8.55z" fill="#fff"/></svg>',26,26,'');
  }
+ applyControlLayout();
 })();
-hold('bg',function(){gasOn=true;playCustomAudio('sfx_gas',true)},function(){gasOn=false;playCustomAudio('sfx_gas',false)});
-hold('br',function(){brkOn=true;playCustomAudio('sfx_rem',true)},function(){brkOn=false;playCustomAudio('sfx_rem',false)});
+hold('bg',function(){if(pauseState||layoutEdit)return;gasOn=true;playCustomAudio('sfx_gas',true)},function(){gasOn=false;playCustomAudio('sfx_gas',false)});
+hold('br',function(){if(pauseState||layoutEdit)return;brkOn=true;playCustomAudio('sfx_rem',true)},function(){brkOn=false;playCustomAudio('sfx_rem',false)});
 hold('bh',honk,function(){});
 WR.addEventListener('contextmenu',function(e){e.preventDefault()});
 ['pointerdown','keydown'].forEach(function(n){window.addEventListener(n,function(){PRAudio.init()})});
 
 window.addEventListener('keydown',function(e){
+ if((e.key=='Escape'||e.key=='p'||e.key=='P')&&G&&G.on&&!G.pause&&!layoutEdit){
+  if(pauseState)resumeGame();else openPause();
+  return;
+ }
+ if(pauseState||layoutEdit)return;
  if(!keys[e.key]){
   if(e.key=='ArrowUp'||e.key=='w'||e.key=='W')playCustomAudio('sfx_gas',true);
   if(e.key=='ArrowDown'||e.key=='s'||e.key=='S')playCustomAudio('sfx_rem',true);
@@ -984,6 +1198,6 @@ showMenu('PANTURA RUSH','Salip bus, truk, angkot, motor, dan becak di jalur Pant
 requestAnimationFrame(loop);
 if('serviceWorker' in navigator){
  if(window.caches)caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k)})});
- window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=6').then(function(r){r.update()}).catch(function(){})});
+ window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=7').then(function(r){r.update()}).catch(function(){})});
 }
 })();
