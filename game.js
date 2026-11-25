@@ -36,7 +36,7 @@ var TYPES={
 };
 
 function reset(){
- G={on:true,t:0,clock:12,dist:0,bonus:0,speed:200,fuel:100,nitro:30,inv:0,
+ G={on:true,t:0,clock:12,dist:0,bonus:0,speed:200,fuel:100,inv:0,
   px:lx(1),tx:lx(1),slip:0,shake:0,flash:0,
   obs:[],haz:[],cn:[],dec:[],pop:[],rain:[],
   w:0,wTarget:0,wName:'Cerah',wTimer:20,spawn:0.5,hz:1.5,cnT:1.5,dcT:0,coins:0,ct:0,cap:100,tl:0,ar:0,leak:0,svT:5,svN:0,sv:null,auto:0,pause:false,cb:CB,tb:-1,py:480,thr:0,hl:0,hs:0,hf:0,pr:0,pw:0,smk:0,dents:[],rg:[],hw:null,mt:'',off:0,pt:[],bend:0,bT:0,bTimer:35,bDur:0,hk:0,cp:0,am:null,amT:45};
@@ -116,7 +116,7 @@ function ambHud(){
  X.fillStyle=f?'rgba(214,40,40,.28)':'rgba(40,100,255,.28)';X.fillRect(RX+LW*A.lane+s,H-260,LW,260);
  X.fillStyle='#fff';X.font='bold 26px Verdana';X.fillText('\u25B2',lx(A.lane)+s,H-150);
 }
-var SVL=1220,RATE=3,TKC=[30,60,100,150],ARC=[40,70,110,160],HLC=[35,70,110],HR=[170,260,380,520],CB=Math.ceil((100+25*4)/RATE);
+var SVL=1220,RATE=3,TKC=[15,30,50,75],ARC=[18,35,55,80],HLC=[15,30,50],HR=[170,260,380,520],CB=Math.ceil((100+25*4)/RATE);
 function svZone(){var S=G.sv;if(!S||S.st!='on')return false;var e=S.y+SVL;return e>PY-110&&e-960<PY}
 function txMin(){if(!G)return RX+16;if(G.auto)return 0;var S=G.sv;return S&&S.st=='on'&&!S.used&&S.side<0&&svZone()?30:RX+16}
 function txMax(){if(!G)return RX+LW*N-16;if(G.auto)return W;var S=G.sv;return S&&S.st=='on'&&!S.used&&S.side>0&&svZone()?W-30:RX+LW*N-16}
@@ -133,13 +133,41 @@ function drawSv(){
 }
 function drawSvTop(){
  var g=G,S=g.sv;if(!S||S.st!='on')return;
- var cy=S.y+SVL/2;if(cy<-80||cy>H+80)return;
  var cx=S.side<0?29:W-29,pom=S.k=='pom',mini=S.k=='pertamini';
+ var nm=pom?'PERTAMINA':(mini?'PERTAMINI':'BENGKEL');
+ var acc=pom?'#d62828':(mini?'#f59e0b':'#2b6cb0');
+ // Papan reklame beberapa meter sebelum pintu masuk (e = S.y + SVL adalah awal jalur masuk)
+ var ry=S.y+SVL+140;
+ if(ry>-60&&ry<H+60){
+  var bx=(S.side<0?28:W-28)+sx(ry);
+  X.save();X.translate(bx,ry);
+  // Tiang penyangga reklame
+  X.fillStyle='#334155';X.fillRect(-3,16,6,18);
+  // Papan reklame utama
+  rr(-27,-24,54,42,5,'#0f172a');
+  X.lineWidth=2;X.strokeStyle=acc;
+  if(X.roundRect){X.beginPath();X.roundRect(-27,-24,54,42,5);X.stroke()}else{X.strokeRect(-27,-24,54,42)}
+  // Strip header warna bangunan
+  rr(-25,-22,50,12,3,acc);
+  X.fillStyle='#fff';X.font='bold 7.5px Verdana';X.textAlign='center';
+  X.fillText(nm,0,-13);
+  // Tulisan WELCOME / DISINI + Panah ke pintu masuk (atas-samping)
+  X.fillStyle='#fde047';X.font='bold 7px Verdana';
+  X.fillText('WELCOME',0,-1);
+  X.fillStyle='#fff';X.font='bold 6.5px Verdana';
+  X.fillText('DISINI '+(S.side<0?'↖':'↗'),0,8);
+  // Panah besar berkedip mengarah ke pintu masuk lajur samping
+  var blink=Math.floor(g.t*5)%2;
+  X.fillStyle=blink?'#4ade80':'#fde047';X.font='bold 10px Verdana';
+  X.fillText(S.side<0?'⬆ MASUK':'MASUK ⬆',0,16);
+  X.restore();
+ }
+ var cy=S.y+SVL/2;if(cy<-80||cy>H+80)return;
  X.save();X.translate(sx(cy)+cx,cy);
- X.globalAlpha=.72;X.fillStyle=pom?'#d62828':(mini?'#f59e0b':'#2b6cb0');X.fillRect(-32,-56,64,112);
+ X.globalAlpha=.72;X.fillStyle=acc;X.fillRect(-32,-56,64,112);
  X.fillStyle=pom?'#f4f4f4':(mini?'#1e3a8a':'#cbd5e0');for(var i=0;i<7;i++)if(i%2)X.fillRect(-32,-56+i*16,64,16);
  X.globalAlpha=1;X.fillStyle='#fff';X.fillRect(-32,-56,64,3);X.fillRect(-32,53,64,3);X.fillRect(-28,-9,56,18);
- X.fillStyle='#111';X.font='bold '+(mini?'9px':'11px')+' Verdana';X.textAlign='center';X.fillText(pom?'PERTAMINA':(mini?'PERTAMINI':'BENGKEL'),0,4);
+ X.fillStyle='#111';X.font='bold '+(mini?'9px':'11px')+' Verdana';X.textAlign='center';X.fillText(nm,0,4);
  X.restore();
 }
 function svHud(){
@@ -181,29 +209,29 @@ function closeService(){var g=G;if(!g||!g.pause)return;M.style.display='none';sh
 function renderService(){
  var g=G;if(!g||!g.pause||!g.sv)return;var k=g.sv.k,isFuel=(k=='pom'||k=='pertamini'),rt=(k=='pertamini'?1.5:RATE);
  var title=k=='pom'?'Pom Bensin Pertamina':(k=='pertamini'?'Pertamini (Eceran)':'Bengkel');
- var h='<h1 style="font-size:26px">'+title+'</h1><p>Koin: <b>'+g.coins+'</b> · BBM: <b>'+Math.round(g.fuel)+'/'+g.cap+'</b></p>';
+ var h='<h1 style="font-size:26px">'+title+'</h1><p>Koin: <b>'+g.coins+'</b> · Bensin: <b>'+Math.ceil(g.fuel)+'/'+g.cap+' L</b></p>';
  if(isFuel){
   var mx=Math.floor(Math.min(g.cap-g.fuel,g.coins*rt));
-  var note=k=='pertamini'?'Harga eceran: 2 koin = 3 BBM (stok bebas).':'Harga resmi: 1 koin = '+RATE+' BBM.';
+  var note=k=='pertamini'?'Harga eceran: 2 koin = 3 Liter (stok bebas).':'Harga resmi: 1 koin = '+RATE+' Liter.';
   h+='<p class="s">'+note+' Geser untuk memilih jumlah.</p><input id="fs" type="range" min="0" max="'+mx+'" value="'+mx+'" style="width:240px"'+(mx<=0?' disabled':'')+'><p id="fc"></p><button id="fb">Isi bensin</button>';
  }else{
   var bt=function(id,t,c,ok){return '<button id="'+id+'" style="display:block;margin:6px auto 0;font-size:13px;padding:10px 14px;width:270px"'+(ok&&g.coins>=c?'':' disabled')+'>'+t+' · '+c+' koin</button>'};
-  h+='<p class="s">Bocor sekarang: '+g.leak.toFixed(1)+' BBM/dtk</p>'+bt('b1','Tambal bocor + perbaiki bodi',12,g.leak>.02||g.dents.length>0)+bt('b2','Perkuat bodi Lv '+g.ar+'/4 (bocor -18%)',ARC[Math.min(g.ar,3)],g.ar<4)+bt('b3','Tangki +25 BBM Lv '+g.tl+'/4 (kapasitas '+g.cap+')',TKC[Math.min(g.tl,3)],g.tl<4)+bt('b4','Klakson Lv '+g.hl+'/3 (jangkauan '+HR[g.hl]+(g.hl<3?' > '+HR[g.hl+1]:'')+', bus/truk cukup 1x)',HLC[Math.min(g.hl,2)],g.hl<3);
-  h+=bt('b5','Bensin eceran (+15 BBM)',10,g.fuel<g.cap);
+  h+='<p class="s">Bocor sekarang: '+g.leak.toFixed(1)+' L/dtk</p>'+bt('b1','Tambal bocor + perbaiki bodi',8,g.leak>.02||g.dents.length>0)+bt('b2','Perkuat bodi Lv '+g.ar+'/4 (bocor -18%)',ARC[Math.min(g.ar,3)],g.ar<4)+bt('b3','Tangki +25 L Lv '+g.tl+'/4 (kapasitas '+g.cap+' L)',TKC[Math.min(g.tl,3)],g.tl<4)+bt('b4','Klakson Lv '+g.hl+'/3 (jangkauan '+HR[g.hl]+(g.hl<3?' > '+HR[g.hl+1]:'')+', bus/truk cukup 1x)',HLC[Math.min(g.hl,2)],g.hl<3);
+  h+=bt('b5','Bensin eceran (+15 L)',7,g.fuel<g.cap);
  }
  h+='<button id="lv" style="background:#3a86ff;color:#fff;margin-top:16px">Lanjut jalan</button>';
  M.innerHTML=h;M.style.display='flex';
  var $=function(i){return document.getElementById(i)};
  if(isFuel){
-  var fs=$('fs'),fc=$('fc'),up=function(){var v=+fs.value;fc.textContent='+'+v+' BBM = '+Math.ceil(v/rt)+' koin'};
+  var fs=$('fs'),fc=$('fc'),up=function(){var v=+fs.value;fc.textContent='+'+v+' L = '+Math.ceil(v/rt)+' koin'};
   fs.oninput=up;up();
   $('fb').onclick=function(){var v=+fs.value,c=Math.ceil(v/rt);if(v>0&&c<=g.coins){g.coins-=c;g.fuel=Math.min(g.cap,g.fuel+v);renderService()}};
  }else{
-  $('b1').onclick=function(){if(g.coins>=12){g.coins-=12;g.leak=0;g.dents=[];renderService()}};
+  $('b1').onclick=function(){if(g.coins>=8){g.coins-=8;g.leak=0;g.dents=[];renderService()}};
   $('b2').onclick=function(){var c=ARC[g.ar];if(g.ar<4&&g.coins>=c){g.coins-=c;g.ar++;renderService()}};
   $('b3').onclick=function(){var c=TKC[g.tl];if(g.tl<4&&g.coins>=c){g.coins-=c;g.tl++;g.cap=100+25*g.tl;renderService()}};
   $('b4').onclick=function(){var c=HLC[g.hl];if(g.hl<3&&g.coins>=c){g.coins-=c;g.hl++;renderService()}};
-  $('b5').onclick=function(){if(g.coins>=10&&g.fuel<g.cap){g.coins-=10;g.fuel=Math.min(g.cap,g.fuel+15);renderService()}};
+  $('b5').onclick=function(){if(g.coins>=7&&g.fuel<g.cap){g.coins-=7;g.fuel=Math.min(g.cap,g.fuel+15);renderService()}};
  }
  $('lv').onclick=closeService;
 }
@@ -270,7 +298,7 @@ function update(dt){
  if(g.svT<=0){g.svN++;var k2='pom';
   if(g.svN==1)k2='pom';
   else if(g.svN==2)k2='bengkel';
-  else{var rsv=Math.random();k2=rsv<.50?'pertamini':(rsv<.80?'bengkel':'pom');}
+  else{var rsv=Math.random();k2=rsv<.45?'pertamini':(rsv<.80?'bengkel':'pom');}
   g.lastK=k2;
   g.cb=CB;g.sv={k:k2,side:Math.random()<.5?-1:1,st:'warn',t:3,distWarn:160,y:-SVL,used:0,tk:0};
   var popTxt=k2=='pom'?'Pom bensin Pertamina di depan!':(k2=='pertamini'?'Pertamini di depan!':'Bengkel di depan!');
@@ -578,7 +606,7 @@ function hud(){
  X.font='11px Verdana';X.fillStyle='#ffd166';X.fillText(per+' · '+g.wName,10,43);
  X.textAlign='right';X.fillStyle='#fff';X.font='bold 20px Verdana';X.fillText(score(),W-10,24);
  speedo();
- bar(100,22,70,g.fuel/g.cap*100,g.fuel/g.cap<.25?'#ff4d4d':'#2dc653','BBM');
+ bar(100,22,74,g.fuel/g.cap*100,g.fuel/g.cap<.25?'#ff4d4d':'#2dc653','BBM '+Math.ceil(g.fuel)+'/'+g.cap+' L');
  
  X.fillStyle='#ffd23f';X.beginPath();X.arc(194,17,6,0,7);X.fill();X.fillStyle='#fff';X.textAlign='left';X.font='bold 14px Verdana';X.fillText(g.coins,204,22);
  if(g.leak>.05){X.fillStyle=Math.floor(g.t*4)%2?'#ff4d4d':'#ffb3b3';X.font='bold 10px Verdana';X.fillText('BOCOR -'+g.leak.toFixed(1)+'/dtk',186,43)}
@@ -612,12 +640,31 @@ function honk(){
   o.lane=nl;o.sw=big?.7:1.1;o.ch=rnd(1.5,2.5);
  });
 }
+var deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',function(e){
+ e.preventDefault();deferredPrompt=e;
+ var ib=document.getElementById('inst');if(ib)ib.style.display='inline-block';
+});
+window.addEventListener('appinstalled',function(){
+ deferredPrompt=null;
+ var ib=document.getElementById('inst');if(ib)ib.style.display='none';
+});
 function showMenu(h,body,btn){
  lastMenu=[h,body,btn];
- M.innerHTML='<h1>'+h+'</h1><p>'+body+'</p><button id="go">'+btn+'</button>'+cfgHTML();
+ var isStandalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone;
+ var instBtn=isStandalone?'':'<button id="inst" style="background:#2dc653;color:#081c15;font-size:13px;padding:10px 16px;margin-top:8px;display:'+(deferredPrompt?'inline-block':'inline-block')+'">⬇ Install Aplikasi</button>';
+ M.innerHTML='<h1>'+h+'</h1><p>'+body+'</p><button id="go">'+btn+'</button>'+instBtn+cfgHTML();
  M.style.display='flex';PRAudio.music('menu');
  var $=function(i){return document.getElementById(i)};
  $('go').onclick=start;
+ if($('inst'))$('inst').onclick=function(){
+  if(deferredPrompt){
+   deferredPrompt.prompt();
+   deferredPrompt.userChoice.then(function(){deferredPrompt=null;showMenu.apply(null,lastMenu)});
+  }else{
+   alert('Untuk menginstall aplikasi:\n\n• Android / Chrome: Ketuk menu titik tiga (⋮) di pojok kanan atas browser lalu pilih "Install aplikasi" atau "Tambahkan ke Layar utama".\n• iPhone / Safari: Ketuk tombol Bagikan (Share) lalu pilih "Add to Home Screen".');
+  }
+ };
  $('sm').onclick=function(){cfg.mode=cfg.mode=='dyn'?'fix':'dyn';saveCfg();showMenu.apply(null,lastMenu)};
  $('ss').onclick=function(){cfg.sfx=cfg.sfx?0:1;saveCfg();showMenu.apply(null,lastMenu)};
  $('sn').onclick=function(){cfg.mus=cfg.mus?0:1;saveCfg();showMenu.apply(null,lastMenu)};
@@ -692,7 +739,7 @@ WR.addEventListener('contextmenu',function(e){e.preventDefault()});
 window.addEventListener('keydown',function(e){keys[e.key]=true;if(e.key=='h'||e.key=='H')honk();if(e.key==' ')e.preventDefault()});
 window.addEventListener('keyup',function(e){keys[e.key]=false});
 reset();G.on=false;saveCfg();draw();
-showMenu('PANTURA RUSH','Salip bus, truk, angkot, motor, dan becak di jalur Pantura. Siang berganti malam, cerah berganti hujan.<br><br>Setir pakai joystick (PC: panah kiri/kanan). GAS membawa mobil maju ke depan layar, REM memundurkannya (PC: panah atas/bawah). Tekan KLAKSON (atau H) agar kendaraan di depan minggir. Lewati kendaraan dengan jarak tipis untuk isi nitro dan koin. Kumpulkan koin untuk isi BBM di Pom Bensin dan upgrade di Bengkel (masuk lewat lajur samping saat ada peringatan). Kamu hanya kalah kalau bensin habis, dan tabrakan membuat tangki bocor.<br><span class="s">Rekor: '+best+'</span>','Mulai');
+showMenu('PANTURA RUSH','Salip bus, truk, angkot, motor, dan becak di jalur Pantura. Siang berganti malam, cerah berganti hujan.<br><br>Setir pakai joystick (PC: panah kiri/kanan). GAS membawa mobil maju ke depan layar, REM memundurkannya (PC: panah atas/bawah). Tekan KLAKSON (atau H) agar kendaraan di depan minggir. Lewati kendaraan dengan jarak tipis untuk dapat bonus skor dan koin. Kumpulkan koin untuk isi BBM di Pom Bensin dan upgrade di Bengkel (masuk lewat lajur samping saat ada peringatan). Kamu hanya kalah kalau bensin habis, dan tabrakan membuat tangki bocor.<br><span class="s">Rekor: '+best+'</span>','Mulai');
 requestAnimationFrame(loop);
 if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});
 })();
