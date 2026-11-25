@@ -53,12 +53,26 @@ var AUDIO_PATHS={
  sfx_buy_ok:'assets/sfx/buy_ok.mp3',
  sfx_buy_fail:'assets/sfx/buy_fail.mp3'
 };
-var AUDIOS={},AUDIO_ERR={},SYNTH={gas:null,rem:null,warnTimer:null,warnStep:0};
+var AUDIOS={},AUDIO_BUFS={},AUDIO_ERR={},SYNTH={gas:null,rem:null,warnTimer:null,warnStep:0,hornBufSrc:null};
+function loadAudioBuffer(k,src){
+ fetch(src).then(function(r){
+  if(!r.ok)throw new Error('404');
+  return r.arrayBuffer();
+ }).then(function(ab){
+  var ctx=getAC();
+  if(ctx&&ctx.decodeAudioData){
+   ctx.decodeAudioData(ab,function(buf){AUDIO_BUFS[k]=buf},function(){AUDIO_ERR[k]=true});
+  }
+ }).catch(function(){AUDIO_ERR[k]=true});
+}
 for(var ak in AUDIO_PATHS){(function(k,src){
  var au=new Audio();au.preload='auto';au.src=src;
  if(k==='mus_warning'||k==='sfx_gas'||k==='sfx_rem')au.loop=true;
  au.addEventListener('error',function(){AUDIO_ERR[k]=true});
  AUDIOS[k]=au;
+ if(k.indexOf('sfx_horn_')===0||k==='sfx_buy_ok'||k==='sfx_buy_fail'){
+  loadAudioBuffer(k,src);
+ }
 })(ak,AUDIO_PATHS[ak])}
 
 function getAC(){
@@ -168,6 +182,17 @@ function playCustomAudio(k,on){
  var isOneShot=(k==='sfx_buy_ok'||k==='sfx_buy_fail'||k.indexOf('sfx_horn_')===0);
  var synthKey=(k==='sfx_buy_ok'?'buy_ok':(k==='sfx_buy_fail'?'buy_fail':k.replace('sfx_','')));
  if(isOneShot){
+  var ctx=getAC();
+  if(ctx&&AUDIO_BUFS[k]){
+   try{
+    var srcNode=ctx.createBufferSource();
+    srcNode.buffer=AUDIO_BUFS[k];
+    srcNode.connect(ctx.destination);
+    srcNode.start(0);
+    if(k.indexOf('sfx_horn_')===0)SYNTH.hornBufSrc=srcNode;
+    return;
+   }catch(e){}
+  }
   if(a&&!AUDIO_ERR[k]){
    try{a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){synthOnce(synthKey)});return}catch(e){}
   }
@@ -199,6 +224,10 @@ function playCustomAudio(k,on){
 }
 
 function stopHornAudio(){
+ if(SYNTH.hornBufSrc){
+  try{SYNTH.hornBufSrc.stop(0)}catch(e){}
+  SYNTH.hornBufSrc=null;
+ }
  for(var i=0;i<=3;i++){
   var ha=AUDIOS['sfx_horn_'+i];
   if(ha&&!ha.paused){try{ha.pause();ha.currentTime=0}catch(e){}}
@@ -1172,7 +1201,11 @@ function resumeGame(){
  last=performance.now();
 }
 
+var settingsOrigin='main';
 function openSettings(from){
+ if(from)settingsOrigin=from;
+ var origin=settingsOrigin;
+ var backLabel=(origin==='pause')?'▶ Selesai & Lanjut Main':'✔ Selesai & Kembali';
  M.innerHTML='<div style="position:relative;z-index:20;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;pointer-events:auto">'+
   '<h1 style="font-size:24px;margin-bottom:10px">PENGATURAN</h1>'+
   '<div style="display:flex;flex-direction:column;gap:8px;width:260px">'+
@@ -1182,39 +1215,42 @@ function openSettings(from){
   tg('st_mus','Musik & Peringatan: '+(cfg.mus?'Hidup':'Mati'))+
   tg('st_lay','📐 Atur Tata Letak Tombol & Speedo','#d97706')+
   '</div>'+
-  '<button id="st_back" type="button" style="position:relative;z-index:30;background:#3a86ff;color:#fff;margin-top:16px;width:260px;min-height:44px;font-weight:bold;cursor:pointer;touch-action:manipulation">✔ Selesai & Kembali</button>'+
+  '<button id="st_back" type="button" style="position:relative;z-index:30;background:#2dc653;color:#081c15;margin-top:16px;width:260px;min-height:46px;font-weight:bold;font-size:14px;cursor:pointer;touch-action:manipulation">'+backLabel+'</button>'+
  '</div>';
  M.style.display='flex';
  var $=function(i){return document.getElementById(i)};
  $('st_ctrl').onclick=function(e){
   e.stopPropagation();
   cfg.ctrl=(cfg.ctrl==='btn'?'joy':'btn');
-  saveCfg();applyControlLayout();openSettings(from);
+  saveCfg();applyControlLayout();openSettings(origin);
  };
  $('st_joy').onclick=function(e){
   e.stopPropagation();
   cfg.mode=(cfg.mode=='dyn'?'fix':'dyn');
-  saveCfg();openSettings(from);
+  saveCfg();openSettings(origin);
  };
  $('st_sfx').onclick=function(e){
   e.stopPropagation();
-  cfg.sfx=cfg.sfx?0:1;saveCfg();openSettings(from);
+  cfg.sfx=cfg.sfx?0:1;saveCfg();openSettings(origin);
  };
  $('st_mus').onclick=function(e){
   e.stopPropagation();
   cfg.mus=cfg.mus?0:1;if(!cfg.mus)playCustomAudio('mus_warning',false);
-  saveCfg();openSettings(from);
+  saveCfg();openSettings(origin);
  };
- $('st_lay').onclick=function(e){e.stopPropagation();openLayoutEditor(from)};
+ $('st_lay').onclick=function(e){e.stopPropagation();openLayoutEditor(origin)};
+ var backDone=false;
  var goBack=function(e){
   if(e){e.preventDefault();e.stopPropagation();}
-  if(from==='pause')openPause();
-  else if(from==='over'&&lastMenu&&lastMenu[0]==='over')showOverMenu(lastMenu[1],lastMenu[2],lastMenu[3]);
+  if(backDone)return;
+  backDone=true;
+  if(origin==='pause'&&G&&G.on)resumeGame();
+  else if(origin==='over'&&lastMenu&&lastMenu[0]==='over')showOverMenu(lastMenu[1],lastMenu[2],lastMenu[3]);
   else showMainScreen();
  };
  var backBtn=$('st_back');
+ backBtn.addEventListener('pointerdown',goBack,{passive:false});
  backBtn.onclick=goBack;
- backBtn.addEventListener('touchend',goBack,{passive:false});
 }
 
 /* ---------- EDITOR TATA LETAK DRAG & DROP + SKALA 50% - 200% ---------- */
@@ -1483,7 +1519,15 @@ hold('bg',function(){if(pauseState||layoutEdit)return;gasOn=true;playCustomAudio
 hold('br',function(){if(pauseState||layoutEdit)return;brkOn=true;playCustomAudio('sfx_rem',true)},function(){brkOn=false;playCustomAudio('sfx_rem',false)});
 hold('bh',honk,stopHornAudio);
 WR.addEventListener('contextmenu',function(e){e.preventDefault()});
-['pointerdown','keydown'].forEach(function(n){window.addEventListener(n,function(){PRAudio.init()})});
+['pointerdown','keydown'].forEach(function(n){window.addEventListener(n,function(){
+ PRAudio.init();
+ getAC();
+ for(var k in AUDIO_PATHS){
+  if((k.indexOf('sfx_horn_')===0||k==='sfx_buy_ok'||k==='sfx_buy_fail')&&!AUDIO_BUFS[k]&&!AUDIO_ERR[k]){
+   loadAudioBuffer(k,AUDIO_PATHS[k]);
+  }
+ }
+})});
 
 window.addEventListener('keydown',function(e){
  if((e.key=='Escape'||e.key=='p'||e.key=='P')&&G&&G.on&&!G.pause&&!layoutEdit){
