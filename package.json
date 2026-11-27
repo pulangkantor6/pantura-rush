@@ -1,0 +1,13 @@
+{
+  "name": "pantura-rush",
+  "version": "9.0.0",
+  "private": true,
+  "description": "Game balap vertikal jalur Pantura (PWA, HTML + Canvas, tanpa dependensi)",
+  "license": "MIT",
+  "scripts": {
+    "serve": "python3 -m http.server 8080",
+    "check": "node --check game.js && node --check audio.js && node --check sw.js && node --check tests/smoke.js && node --check tools/bump-version.js",
+    "test": "node tests/smoke.js",
+    "bump": "node tools/bump-version.js"
+  }
+}
