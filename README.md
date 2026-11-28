@@ -10,6 +10,8 @@ Game balap vertikal bergaya Road Fighter dengan nuansa jalur Pantura. PWA murni 
 - Koin di jalan untuk beli BBM di pom bensin dan upgrade di bengkel (tangki, bodi, klakson); anggaran koin per siklus dibatasi
 - Klakson berjangkauan (bus dan truk butuh 2 klakson sebelum upgrade), gas dan rem yang menggeser posisi mobil di layar
 - Combo nyaris-tabrak, slipstream di belakang bus/truk, checkpoint kota rute Pantura (Bekasi sampai Surabaya)
+- Layanan di jalan: Pertamina, Pertamini, Rest Area, dan Bengkel (semua lewat lajur samping dengan auto-drive)
+- Garasi 5 mobil dengan sprite berwarna; mobil terbuka otomatis berdasarkan total koin dari semua permainan (tersimpan di perangkat)
 - Kesulitan bertahap: mudah sampai bengkel pertama
 - Pengaturan: joystick dinamis/tetap, kontrol tombol/joystick penuh, editor tata letak, grafis hemat, kilatan layar, musik dan SFX
 - Tutorial di dalam game, petunjuk singkat saat pertama bertemu objek (Pertamina, Pertamini, bengkel, ambulance, polisi tidur, genangan, lubang)
