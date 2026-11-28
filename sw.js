@@ -3,7 +3,7 @@
    - Aset (gambar, audio, video): cache dulu, diperbarui di latar (stale-while-revalidate).
    - Request Range (audio/video) dilayani dari cache; bila belum ada, lewat jaringan sambil disimpan di latar.
    - Naikkan V setiap rilis (npm run bump) agar cache lama dibersihkan. */
-const V = 'pantura-rush-v9';
+const V = 'pantura-rush-v10';
 
 const CORE = [
   './', 'index.html', 'style.css', 'audio.js', 'game.js', 'manifest.webmanifest',

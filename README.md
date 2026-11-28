@@ -12,11 +12,14 @@ Game balap vertikal bergaya Road Fighter dengan nuansa jalur Pantura. PWA murni 
 - Combo nyaris-tabrak, slipstream di belakang bus/truk, checkpoint kota rute Pantura (Bekasi sampai Surabaya)
 - Kesulitan bertahap: mudah sampai bengkel pertama
 - Pengaturan: joystick dinamis/tetap, kontrol tombol/joystick penuh, editor tata letak, grafis hemat, kilatan layar, musik dan SFX
+- Tutorial di dalam game, petunjuk singkat saat pertama bertemu objek (Pertamina, Pertamini, bengkel, ambulance, polisi tidur, genangan, lubang)
 - Pause otomatis saat aplikasi disembunyikan, bagikan skor, install ke layar utama, pembaruan otomatis
 
 ## Kontrol
-- HP: joystick kiri untuk setir, tombol GAS (maju ke depan layar), REM (mundur), KLAKSON
+- HP (mode Tombol Layar): joystick untuk setir, tombol GAS (maju ke depan layar), REM (mundur), KLAKSON
+- HP (mode Full Joystick, di Pengaturan): geser joystick ke atas = gas, ke bawah = rem, **ketuk layar 2x = klakson** (tombol gas/rem/klakson disembunyikan)
 - PC: panah kiri/kanan atau A/D (setir), panah atas/bawah atau W/S (gas/rem), H (klakson)
+- Penjelasan lengkap semua objek dan event ada di **Pengaturan > Tutorial & Info Objek**
 
 ## Struktur
 ```
@@ -45,11 +48,16 @@ Buka http://localhost:8080. Service worker butuh `localhost` atau HTTPS.
 3. Buka `https://USERNAME.github.io/NAMA-REPO/`.
 
 ## Rilis versi baru
-Setiap mengubah kode atau aset, naikkan versi supaya cache perangkat pemain diperbarui:
+Browser menyimpan salinan game (cache) supaya bisa dimainkan offline. Agar pemain mendapat versi terbaru, **nomor versi harus dinaikkan setiap kali kamu mengubah kode atau aset**. Nomor itu ada di dua tempat: `const V = 'pantura-rush-vN'` di `sw.js` dan `var APP_VER='N'` di `game.js`.
+
+Cara otomatis (butuh Node.js terpasang):
 ```bash
-npm run bump         # menaikkan versi di sw.js dan game.js (tampil di Pengaturan)
-git add -A && git commit -m "Rilis vN" && git push
+npm run bump                          # menaikkan kedua nomor sekaligus
+git add -A && git commit -m "Rilis" && git push
 ```
+Cara manual tanpa Node.js: ubah kedua angka itu sama-sama menjadi angka berikutnya (mis. 10 menjadi 11), bisa langsung lewat editor di github.com, lalu commit.
+
+Jangan menambahkan properti `id` di `manifest.webmanifest`: itu mengubah identitas aplikasi sehingga browser menganggap aplikasi yang sudah terpasang belum terpasang.
 
 ## Tes
 ```bash
