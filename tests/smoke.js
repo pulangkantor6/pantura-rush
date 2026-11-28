@@ -124,7 +124,7 @@ const click = n => els[n] && els[n].onclick && ev(els[n].onclick);
     ev(els.main_screen.onclick); step(5);
   };
   await freshGame();
-  for (const kind of ['pom', 'pertamini', 'bengkel']) {
+  for (const kind of ['pom', 'pertamini', 'restarea', 'bengkel']) {
     check(__PR_TEST__.shop(kind), 'game tidak sedang berjalan untuk uji toko ' + kind);
     check(els.m._h.includes('id="lv"'), 'toko ' + kind + ' tidak terbuka');
     check(pauseBtn() && pauseBtn().style.display === 'none', 'tombol pause seharusnya tersembunyi saat toko terbuka');
@@ -143,8 +143,9 @@ const click = n => els[n] && els[n].onclick && ev(els[n].onclick);
   click('st_ctrl');                                  // ganti ke Full Joystick
   click('st_tut');
   check(els.m._h.includes('TUTORIAL 1/'), 'tutorial tidak terbuka');
-  for (let k = 0; k < 6; k++) click('tut_next');
-  check(els.m._h.includes('TUTORIAL 7/'), 'navigasi tutorial gagal');
+  let pages = 1;
+  while (!els.m._h.includes('tut_reset') && pages < 30) { click('tut_next'); pages++; }
+  check(pages >= 8 && els.m._h.includes('TUTORIAL ' + pages + '/' + pages), 'navigasi tutorial gagal (halaman: ' + pages + ')');
   click('tut_next');                                 // halaman terakhir -> kembali ke pengaturan
   check(els.m._h.includes('PENGATURAN'), 'tutorial tidak kembali ke pengaturan');
   els.st_back.l.pointerdown({ preventDefault() {}, stopPropagation() {} });
@@ -154,6 +155,54 @@ const click = n => els[n] && els[n].onclick && ev(els[n].onclick);
   ev(els.main_screen.onclick);
   check(els.zone.style.display === 'block', 'layar utama tidak bisa memulai game setelah jeda singkat');
   step(30);
+
+  // --- fungsi bantu kestabilan state game (kebocoran memori / angka rusak)
+  const stable = label => {
+    const g = __PR_TEST__.state();
+    if (!g || !g.on) return;
+    ['px', 'py', 'speed', 'fuel', 'dist', 'tx', 'leak', 'coins'].forEach(k => check(Number.isFinite(g[k]), label + ': ' + k + ' bukan angka (' + g[k] + ')'));
+    const lim = { obs: 60, pt: 900, pop: 60, haz: 60, cn: 160, dec: 120, rg: 30 };
+    Object.keys(lim).forEach(k => check(g[k].length <= lim[k], label + ': array ' + k + ' membesar (' + g[k].length + ')'));
+    check(g.fuel <= g.cap + 0.001, label + ': BBM melebihi kapasitas');
+  };
+  const toMain = async () => {
+    if (pauseBtn() && pauseBtn().style.display === 'flex') { ev(pauseBtn().l.pointerdown); click('p_hom'); }
+    await sleep(600);
+  };
+  const startFromMain = async () => { await sleep(600); ev(els.main_screen.onclick); step(5); };
+
+  // --- skenario: garasi (kunci koin, anggaran koin, bank koin) dan kestabilan tiap mobil
+  await toMain();
+  __PR_TEST__.setWallet(0);
+  click('main_garage');
+  check(els.m._h.includes('GARASI'), 'garasi tidak terbuka');
+  click('car_suv');                                  // masih terkunci
+  click('gar_ok');
+  await startFromMain();
+  let g0 = __PR_TEST__.state();
+  check(g0 && g0.cap === 100 && g0.ar === 0, 'mobil terkunci seharusnya jatuh ke MPV Merah (cap ' + (g0 && g0.cap) + ')');
+  const w0 = __PR_TEST__.wallet();
+  g0.ct = 200; step(300);                            // bank koin tiap beberapa detik
+  check(__PR_TEST__.wallet() >= w0 + 200, 'koin tidak masuk ke total permanen');
+  for (const car of ['sport', 'suv', 'travel', 'patroli', 'merah']) {
+    await toMain();
+    __PR_TEST__.setWallet(5000);
+    click('main_garage'); click('car_' + car); click('gar_ok');
+    await startFromMain();
+    const g = __PR_TEST__.state();
+    check(g && g.on, 'game tidak berjalan untuk mobil ' + car);
+    if (car === 'suv') check(g.cap === 115 && g.ar === 1, 'status SUV salah (cap ' + g.cap + ', ar ' + g.ar + ')');
+    if (car === 'travel') check(g.cap === 130 && g.cb === Math.ceil((130 + 100) / 3), 'Travel: kapasitas/anggaran koin salah (cap ' + g.cap + ', cb ' + g.cb + ')');
+    if (car === 'patroli') check(g.hl === 1, 'Patroli seharusnya klakson Lv 1');
+    for (let k = 0; k < 40; k++) {
+      ev(zl.pointerdown); ev(zl.pointermove, { clientX: 40 + (k % 3) * 60 }); ev(gl.pointerdown, { pointerId: 2 });
+      step(60); stable('mobil ' + car);
+      ev(gl.pointerup, { pointerId: 2 }); ev(zl.pointerup);
+    }
+  }
+  await toMain();
+  __PR_TEST__.setWallet(0);
+  await startFromMain();
 
   // --- skenario: klakson ketuk 2x pada mode Full Joystick
   const wl = els.w.l || {};
